@@ -1,11 +1,11 @@
 package com.example.change_your_life
 
+import android.app.Activity
 import android.os.Bundle
 import android.widget.Button
 import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
 
-class BlockActivity : AppCompatActivity() {
+class BlockActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
