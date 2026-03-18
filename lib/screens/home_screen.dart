@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../models/app_block.dart';
 import '../services/usage_access_service.dart';
 import 'apps_selection_screen.dart';
 import 'friend_screen.dart';
+import 'block_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -28,11 +30,14 @@ class _HomeScreenState extends State<HomeScreen> {
   bool hasUsagePermission = false;
   String currentForegroundApp = 'No detectada';
 
+  bool _isBlockScreenOpen = false;
+
   @override
   void initState() {
     super.initState();
     _loadSavedData();
     _checkUsagePermission();
+    _startMonitoring();
   }
 
   Future<void> _loadSavedData() async {
@@ -54,35 +59,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
       friendName = prefs.getString('friendName');
       friendEmail = prefs.getString('friendEmail');
+
       activeBlocks = savedBlocks
           .map((item) => AppBlock.fromMap(jsonDecode(item)))
           .toList();
+
       isLoading = false;
     });
   }
-
-  Future<void> _checkUsagePermission() async {
-    final granted = await _usageAccessService.hasPermission();
-    setState(() {
-      hasUsagePermission = granted;
-    });
-  }
-
-  Future<void> _requestUsagePermission() async {
-    await _usageAccessService.requestPermission();
-    await Future.delayed(const Duration(seconds: 2));
-    await _checkUsagePermission();
-  }
-
-  Future<void> _detectCurrentApp() async {
-  final packageName = await _usageAccessService.getCurrentForegroundApp(
-    ownPackageName: 'com.example.change_your_life',
-  );
-
-  setState(() {
-    currentForegroundApp = packageName ?? 'No detectada';
-  });
-}
 
   Future<void> _saveData() async {
     final prefs = await SharedPreferences.getInstance();
@@ -104,6 +88,84 @@ class _HomeScreenState extends State<HomeScreen> {
         activeBlocks.map((block) => jsonEncode(block.toMap())).toList();
 
     await prefs.setStringList('activeBlocks', encodedBlocks);
+  }
+
+  Future<void> _checkUsagePermission() async {
+    final granted = await _usageAccessService.hasPermission();
+    if (!mounted) return;
+    setState(() {
+      hasUsagePermission = granted;
+    });
+  }
+
+  Future<void> _requestUsagePermission() async {
+    await _usageAccessService.requestPermission();
+    await Future.delayed(const Duration(seconds: 2));
+    await _checkUsagePermission();
+  }
+
+  Future<void> _detectCurrentApp() async {
+    final packageName = await _usageAccessService.getCurrentForegroundApp(
+      ownPackageName: 'com.example.change_your_life',
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      currentForegroundApp = packageName ?? 'No detectada';
+    });
+
+    _checkIfDetectedAppIsBlocked(packageName);
+  }
+
+  void _checkIfDetectedAppIsBlocked(String? packageName) {
+    if (packageName == null) return;
+    if (_isBlockScreenOpen) return;
+
+    AppBlock? matchedBlock;
+
+    for (final block in activeBlocks) {
+      if (block.packageName == packageName) {
+        matchedBlock = block;
+        break;
+      }
+    }
+
+    if (matchedBlock != null) {
+      _openBlockScreen(matchedBlock);
+    }
+  }
+
+  void _openBlockScreen(AppBlock block) {
+    _isBlockScreenOpen = true;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BlockScreen(
+          appName: block.appName,
+          packageName: block.packageName,
+          friendName: block.friendName,
+          endDate: block.endDate,
+        ),
+      ),
+    ).then((_) {
+      _isBlockScreenOpen = false;
+    });
+  }
+
+  void _startMonitoring() {
+    Future.doWhile(() async {
+      await Future.delayed(const Duration(seconds: 3));
+
+      if (!mounted) return false;
+
+      if (hasUsagePermission) {
+        await _detectCurrentApp();
+      }
+
+      return true;
+    });
   }
 
   Future<void> _openAppsSelection() async {
@@ -209,6 +271,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     await _saveBlocks();
+    if (!mounted) return;
     setState(() {});
 
     _showMessage('Bloqueos activados correctamente.');
@@ -236,6 +299,7 @@ class _HomeScreenState extends State<HomeScreen> {
       friendName = null;
       friendEmail = null;
       activeBlocks.clear();
+      currentForegroundApp = 'No detectada';
     });
 
     _showMessage('Datos borrados.');

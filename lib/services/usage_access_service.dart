@@ -6,8 +6,7 @@ class UsageAccessService {
     if (!Platform.isAndroid) return false;
 
     try {
-      final permission = await UsageStats.checkUsagePermission() ?? false;
-      return permission;
+      return await UsageStats.checkUsagePermission() ?? false;
     } catch (_) {
       return false;
     }

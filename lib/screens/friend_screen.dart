@@ -38,9 +38,7 @@ class _FriendScreenState extends State<FriendScreen> {
 
     if (name.isEmpty || email.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Completá nombre y email.'),
-        ),
+        const SnackBar(content: Text('Completá nombre y email.')),
       );
       return;
     }

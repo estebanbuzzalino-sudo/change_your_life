@@ -34,12 +34,12 @@ class AppBlock {
 
   factory AppBlock.fromMap(Map<String, dynamic> map) {
     return AppBlock(
-      appName: map['appName'],
+      appName: map['appName'] ?? '',
       packageName: map['packageName'] ?? '',
-      durationType: map['durationType'],
-      durationValue: map['durationValue'],
-      friendName: map['friendName'],
-      friendEmail: map['friendEmail'],
+      durationType: map['durationType'] ?? 'Días',
+      durationValue: map['durationValue'] ?? 1,
+      friendName: map['friendName'] ?? '',
+      friendEmail: map['friendEmail'] ?? '',
       startDate: DateTime.parse(map['startDate']),
       endDate: DateTime.parse(map['endDate']),
     );
