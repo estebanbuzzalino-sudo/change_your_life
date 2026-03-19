@@ -3,6 +3,7 @@ package com.example.change_your_life
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.ApplicationInfo
 import android.view.accessibility.AccessibilityEvent
 
@@ -10,6 +11,16 @@ class AppBlockAccessibilityService : AccessibilityService() {
 
     private var lastBlockedPackage: String? = null
     private var lastLaunchTime: Long = 0L
+    private val prefsFileName = "FlutterSharedPreferences"
+    private val blockedPackagesKey = "flutter.blocked_packages_csv"
+    private lateinit var prefs: SharedPreferences
+    private var blockedPackagesCache: Set<String> = emptySet()
+    private var prefsListenerRegistered = false
+    private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == blockedPackagesKey) {
+            refreshBlockedPackages()
+        }
+    }
     private val criticalPackages = setOf(
         "android",
         "com.android.settings",
@@ -42,6 +53,25 @@ class AppBlockAccessibilityService : AccessibilityService() {
         }
     }
 
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        ensurePrefsInitialized()
+        refreshBlockedPackages()
+
+        if (!prefsListenerRegistered) {
+            prefs.registerOnSharedPreferenceChangeListener(prefsListener)
+            prefsListenerRegistered = true
+        }
+    }
+
+    override fun onDestroy() {
+        if (this::prefs.isInitialized && prefsListenerRegistered) {
+            prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
+            prefsListenerRegistered = false
+        }
+        super.onDestroy()
+    }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
 
@@ -55,7 +85,7 @@ class AppBlockAccessibilityService : AccessibilityService() {
             return
         }
 
-        val blockedPackages = getBlockedPackages()
+        val blockedPackages = blockedPackagesCache
 
         if (blockedPackages.contains(openedPackage)) {
             val now = System.currentTimeMillis()
@@ -91,13 +121,22 @@ class AppBlockAccessibilityService : AccessibilityService() {
         return launcherPackages.contains(openedPackage)
     }
 
-    private fun getBlockedPackages(): Set<String> {
-        val prefs = applicationContext.getSharedPreferences(
-            "FlutterSharedPreferences",
-            Context.MODE_PRIVATE
-        )
+    private fun ensurePrefsInitialized() {
+        if (!this::prefs.isInitialized) {
+            prefs = applicationContext.getSharedPreferences(
+                prefsFileName,
+                Context.MODE_PRIVATE
+            )
+        }
+    }
 
-        val csv = prefs.getString("flutter.blocked_packages_csv", "") ?: ""
+    private fun refreshBlockedPackages() {
+        ensurePrefsInitialized()
+        blockedPackagesCache = getBlockedPackages()
+    }
+
+    private fun getBlockedPackages(): Set<String> {
+        val csv = prefs.getString(blockedPackagesKey, "") ?: ""
 
         return csv.split(",")
             .map { it.trim() }
