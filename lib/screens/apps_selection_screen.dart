@@ -29,7 +29,7 @@ class _AppsSelectionScreenState extends State<AppsSelectionScreen> {
   Future<void> _loadInstalledApps() async {
     try {
       final apps = await InstalledApps.getInstalledApps(
-        excludeSystemApps: false,
+        excludeSystemApps: true,
         excludeNonLaunchableApps: true,
         withIcon: false,
       );
