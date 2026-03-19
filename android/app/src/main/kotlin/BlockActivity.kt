@@ -1,6 +1,7 @@
 package com.example.change_your_life
 
 import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
 import android.widget.TextView
@@ -22,6 +23,10 @@ class BlockActivity : Activity() {
         packageText.text = "Package: $packageName"
 
         closeButton.setOnClickListener {
+            val homeIntent = Intent(Intent.ACTION_MAIN)
+            homeIntent.addCategory(Intent.CATEGORY_HOME)
+            homeIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            startActivity(homeIntent)
             finish()
         }
     }

@@ -30,14 +30,11 @@ class _HomeScreenState extends State<HomeScreen> {
   bool hasUsagePermission = false;
   String currentForegroundApp = 'No detectada';
 
-  bool _isBlockScreenOpen = false;
-
   @override
   void initState() {
     super.initState();
     _loadSavedData();
     _checkUsagePermission();
-    _startMonitoring();
   }
 
   Future<void> _loadSavedData() async {
@@ -45,27 +42,30 @@ class _HomeScreenState extends State<HomeScreen> {
     final savedBlocks = prefs.getStringList('activeBlocks') ?? [];
     final savedApps = prefs.getStringList('selectedApps') ?? [];
 
+    final decodedApps = savedApps
+        .map((item) => Map<String, String>.from(jsonDecode(item)))
+        .toList();
+
+    final decodedBlocks = savedBlocks
+        .map((item) => AppBlock.fromMap(jsonDecode(item)))
+        .toList();
+
     setState(() {
       selectedDurationType = prefs.getString('durationType') ?? 'Días';
       selectedValue = prefs.getDouble('durationValue') ?? 7;
 
       selectedApps
         ..clear()
-        ..addAll(
-          savedApps.map(
-            (item) => Map<String, String>.from(jsonDecode(item)),
-          ),
-        );
+        ..addAll(decodedApps);
 
       friendName = prefs.getString('friendName');
       friendEmail = prefs.getString('friendEmail');
 
-      activeBlocks = savedBlocks
-          .map((item) => AppBlock.fromMap(jsonDecode(item)))
-          .toList();
-
+      activeBlocks = decodedBlocks;
       isLoading = false;
     });
+
+    await _saveBlockedPackagesForAndroid();
   }
 
   Future<void> _saveData() async {
@@ -90,9 +90,22 @@ class _HomeScreenState extends State<HomeScreen> {
     await prefs.setStringList('activeBlocks', encodedBlocks);
   }
 
+  Future<void> _saveBlockedPackagesForAndroid() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final packages = activeBlocks
+        .map((block) => block.packageName)
+        .where((pkg) => pkg.isNotEmpty)
+        .toSet()
+        .toList();
+
+    await prefs.setString('blocked_packages_csv', packages.join(','));
+  }
+
   Future<void> _checkUsagePermission() async {
     final granted = await _usageAccessService.hasPermission();
     if (!mounted) return;
+
     setState(() {
       hasUsagePermission = granted;
     });
@@ -113,58 +126,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     setState(() {
       currentForegroundApp = packageName ?? 'No detectada';
-    });
-
-    _checkIfDetectedAppIsBlocked(packageName);
-  }
-
-  void _checkIfDetectedAppIsBlocked(String? packageName) {
-    if (packageName == null) return;
-    if (_isBlockScreenOpen) return;
-
-    AppBlock? matchedBlock;
-
-    for (final block in activeBlocks) {
-      if (block.packageName == packageName) {
-        matchedBlock = block;
-        break;
-      }
-    }
-
-    if (matchedBlock != null) {
-      _openBlockScreen(matchedBlock);
-    }
-  }
-
-  void _openBlockScreen(AppBlock block) {
-    _isBlockScreenOpen = true;
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => BlockScreen(
-          appName: block.appName,
-          packageName: block.packageName,
-          friendName: block.friendName,
-          endDate: block.endDate,
-        ),
-      ),
-    ).then((_) {
-      _isBlockScreenOpen = false;
-    });
-  }
-
-  void _startMonitoring() {
-    Future.doWhile(() async {
-      await Future.delayed(const Duration(seconds: 3));
-
-      if (!mounted) return false;
-
-      if (hasUsagePermission) {
-        await _detectCurrentApp();
-      }
-
-      return true;
     });
   }
 
@@ -271,7 +232,10 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     await _saveBlocks();
+    await _saveBlockedPackagesForAndroid();
+
     if (!mounted) return;
+
     setState(() {});
 
     _showMessage('Bloqueos activados correctamente.');
@@ -291,6 +255,7 @@ class _HomeScreenState extends State<HomeScreen> {
     await prefs.remove('friendName');
     await prefs.remove('friendEmail');
     await prefs.remove('activeBlocks');
+    await prefs.remove('blocked_packages_csv');
 
     setState(() {
       selectedDurationType = 'Días';
@@ -303,6 +268,20 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     _showMessage('Datos borrados.');
+  }
+
+  void _openBlockScreen(AppBlock block) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BlockScreen(
+          appName: block.appName,
+          packageName: block.packageName,
+          friendName: block.friendName,
+          endDate: block.endDate,
+        ),
+      ),
+    );
   }
 
   @override
