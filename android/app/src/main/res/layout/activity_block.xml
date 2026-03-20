@@ -41,6 +41,13 @@
         android:layout_marginBottom="32dp" />
 
     <Button
+        android:id="@+id/requestUnlockButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Solicitar desbloqueo"
+        android:layout_marginBottom="12dp" />
+
+    <Button
         android:id="@+id/closeButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
