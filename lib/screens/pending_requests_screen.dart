@@ -112,9 +112,10 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
 
   PendingUnlockRequest? _parsePendingEntry(String entry) {
     if (entry.contains('|')) {
-      final packageName = entry.substringBefore('|').trim();
+      final separatorIndex = entry.indexOf('|');
+      final packageName = entry.substring(0, separatorIndex).trim();
       if (packageName.isEmpty) return null;
-      final timestamp = int.tryParse(entry.substringAfter('|').trim());
+      final timestamp = int.tryParse(entry.substring(separatorIndex + 1).trim());
       return PendingUnlockRequest(
         packageName: packageName,
         requestedAtMillis: timestamp,
@@ -144,8 +145,9 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
       final entry = raw.trim();
       if (entry.isEmpty || !entry.contains('|')) continue;
 
-      final packageName = entry.substringBefore('|').trim();
-      final until = int.tryParse(entry.substringAfter('|').trim());
+      final separatorIndex = entry.indexOf('|');
+      final packageName = entry.substring(0, separatorIndex).trim();
+      final until = int.tryParse(entry.substring(separatorIndex + 1).trim());
       if (packageName.isEmpty || until == null) continue;
 
       final existing = unlocked[packageName];
