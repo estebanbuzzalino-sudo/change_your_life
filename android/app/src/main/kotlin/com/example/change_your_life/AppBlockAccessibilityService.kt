@@ -13,12 +13,15 @@ class AppBlockAccessibilityService : AccessibilityService() {
     private var lastLaunchTime: Long = 0L
     private val prefsFileName = "FlutterSharedPreferences"
     private val blockedPackagesKey = "flutter.blocked_packages_csv"
+    private val temporaryUnlockedPackagesKey = "flutter.temporary_unlocked_packages_csv"
     private lateinit var prefs: SharedPreferences
     private var blockedPackagesCache: Set<String> = emptySet()
+    private var temporarilyUnlockedCache: Map<String, Long> = emptyMap()
     private var prefsListenerRegistered = false
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        if (key == blockedPackagesKey) {
-            refreshBlockedPackages()
+        when (key) {
+            blockedPackagesKey -> refreshBlockedPackages()
+            temporaryUnlockedPackagesKey -> refreshTemporarilyUnlockedPackages()
         }
     }
     private val criticalPackages = setOf(
@@ -57,6 +60,7 @@ class AppBlockAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
         ensurePrefsInitialized()
         refreshBlockedPackages()
+        refreshTemporarilyUnlockedPackages()
 
         if (!prefsListenerRegistered) {
             prefs.registerOnSharedPreferenceChangeListener(prefsListener)
@@ -79,17 +83,24 @@ class AppBlockAccessibilityService : AccessibilityService() {
             return
         }
 
+        if (!this::prefs.isInitialized) {
+            ensurePrefsInitialized()
+            refreshBlockedPackages()
+            refreshTemporarilyUnlockedPackages()
+        }
+
         val openedPackage = event.packageName?.toString() ?: return
 
         if (isCriticalPackage(openedPackage)) {
             return
         }
 
+        val now = System.currentTimeMillis()
         val blockedPackages = blockedPackagesCache
 
-        if (blockedPackages.contains(openedPackage)) {
-            val now = System.currentTimeMillis()
-
+        if (blockedPackages.contains(openedPackage) &&
+            !isTemporarilyUnlocked(openedPackage, now)
+        ) {
             // Evita abrir muchas veces seguidas la pantalla de bloqueo
             if (lastBlockedPackage == openedPackage && now - lastLaunchTime < 1500) {
                 return
@@ -133,6 +144,63 @@ class AppBlockAccessibilityService : AccessibilityService() {
     private fun refreshBlockedPackages() {
         ensurePrefsInitialized()
         blockedPackagesCache = getBlockedPackages()
+    }
+
+    private fun refreshTemporarilyUnlockedPackages() {
+        ensurePrefsInitialized()
+        val csv = prefs.getString(temporaryUnlockedPackagesKey, "") ?: ""
+        val parsed = parseTemporarilyUnlockedPackages(csv)
+        val now = System.currentTimeMillis()
+        val active = parsed.filterValues { it > now }
+
+        temporarilyUnlockedCache = active
+
+        if (active.size != parsed.size) {
+            persistTemporarilyUnlockedPackages(active)
+        }
+    }
+
+    private fun isTemporarilyUnlocked(packageName: String, now: Long): Boolean {
+        val unlockedUntil = temporarilyUnlockedCache[packageName] ?: return false
+
+        if (unlockedUntil <= now) {
+            val updated = temporarilyUnlockedCache.toMutableMap()
+            updated.remove(packageName)
+            temporarilyUnlockedCache = updated
+            persistTemporarilyUnlockedPackages(updated)
+            return false
+        }
+
+        return true
+    }
+
+    private fun parseTemporarilyUnlockedPackages(csv: String): Map<String, Long> {
+        if (csv.isBlank()) return emptyMap()
+
+        val unlocked = LinkedHashMap<String, Long>()
+
+        csv.split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .forEach { entry ->
+                val packageName = entry.substringBefore("|").trim()
+                if (packageName.isEmpty()) return@forEach
+
+                val unlockedUntil = entry.substringAfter("|", "").trim().toLongOrNull()
+                    ?: return@forEach
+
+                val existing = unlocked[packageName]
+                if (existing == null || unlockedUntil > existing) {
+                    unlocked[packageName] = unlockedUntil
+                }
+            }
+
+        return unlocked
+    }
+
+    private fun persistTemporarilyUnlockedPackages(packages: Map<String, Long>) {
+        val csv = packages.entries.joinToString(",") { "${it.key}|${it.value}" }
+        prefs.edit().putString(temporaryUnlockedPackagesKey, csv).apply()
     }
 
     private fun getBlockedPackages(): Set<String> {

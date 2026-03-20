@@ -7,6 +7,7 @@ import '../services/usage_access_service.dart';
 import 'apps_selection_screen.dart';
 import 'friend_screen.dart';
 import 'block_screen.dart';
+import 'pending_requests_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -169,6 +170,15 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _openPendingRequestsScreen() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const PendingRequestsScreen(),
+      ),
+    );
+  }
+
   String get durationText {
     final value = selectedValue.round();
     if (selectedDurationType == 'Días') {
@@ -256,6 +266,8 @@ class _HomeScreenState extends State<HomeScreen> {
     await prefs.remove('friendEmail');
     await prefs.remove('activeBlocks');
     await prefs.remove('blocked_packages_csv');
+    await prefs.remove('pending_unlock_requests_csv');
+    await prefs.remove('temporary_unlocked_packages_csv');
 
     setState(() {
       selectedDurationType = 'Días';
@@ -377,6 +389,11 @@ class _HomeScreenState extends State<HomeScreen> {
             ElevatedButton(
               onPressed: _openFriendScreen,
               child: const Text('Elegir Amigo Responsable'),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton(
+              onPressed: _openPendingRequestsScreen,
+              child: const Text('Ver solicitudes pendientes'),
             ),
             const SizedBox(height: 10),
             if (friendName != null &&

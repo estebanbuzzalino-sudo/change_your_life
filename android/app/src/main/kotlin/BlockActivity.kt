@@ -45,6 +45,7 @@ class BlockActivity : Activity() {
     private fun savePendingUnlockRequest(packageName: String) {
         if (packageName.isBlank()) return
 
+        val now = System.currentTimeMillis()
         val prefs = applicationContext.getSharedPreferences(
             prefsFileName,
             MODE_PRIVATE
@@ -52,16 +53,17 @@ class BlockActivity : Activity() {
         val requestsByPackage = loadPendingRequests(prefs)
 
         if (!requestsByPackage.containsKey(packageName)) {
-            requestsByPackage[packageName] = System.currentTimeMillis()
+            requestsByPackage[packageName] = now
         }
 
-        val csv = requestsByPackage.keys.joinToString(",")
+        val csv = serializePendingRequests(requestsByPackage)
         prefs.edit().putString(pendingUnlockRequestsKey, csv).apply()
     }
 
-    private fun loadPendingRequests(prefs: SharedPreferences): LinkedHashMap<String, Long?> {
+    private fun loadPendingRequests(prefs: SharedPreferences): LinkedHashMap<String, Long> {
         val csv = prefs.getString(pendingUnlockRequestsKey, "") ?: ""
-        val requests = LinkedHashMap<String, Long?>()
+        val requests = LinkedHashMap<String, Long>()
+        val now = System.currentTimeMillis()
 
         csv.split(",")
             .map { it.trim() }
@@ -69,14 +71,18 @@ class BlockActivity : Activity() {
             .forEach { entry ->
                 val request = parsePendingRequestEntry(entry)
                 if (request != null && !requests.containsKey(request.packageName)) {
-                    requests[request.packageName] = request.requestedAtMillis
+                    requests[request.packageName] = request.requestedAtMillis ?: now
                 }
             }
 
         return requests
     }
 
-    // MVP persists plain package CSV. Parser is timestamp-ready for future "package|timestamp".
+    private fun serializePendingRequests(requests: Map<String, Long>): String {
+        return requests.entries.joinToString(",") { "${it.key}|${it.value}" }
+    }
+
+    // Supports both legacy "package" and current "package|timestamp" entries.
     private fun parsePendingRequestEntry(entry: String): PendingRequestEntry? {
         return if (entry.contains("|")) {
             val pkg = entry.substringBefore("|").trim()
