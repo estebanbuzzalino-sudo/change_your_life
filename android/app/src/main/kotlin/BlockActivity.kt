@@ -42,6 +42,12 @@ class BlockActivity : Activity() {
         }
     }
 
+    override fun onPause() {
+        super.onPause()
+        // Evita que esta pantalla quede en la pila al volver a la app principal.
+        finish()
+    }
+
     private fun savePendingUnlockRequest(packageName: String) {
         if (packageName.isBlank()) return
 

@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:installed_apps/installed_apps.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/app_block.dart';
@@ -9,6 +11,16 @@ import 'friend_screen.dart';
 import 'block_screen.dart';
 import 'pending_requests_screen.dart';
 
+class _TemporaryUnlockInfo {
+  final String packageName;
+  final int unlockedUntilMillis;
+
+  const _TemporaryUnlockInfo({
+    required this.packageName,
+    required this.unlockedUntilMillis,
+  });
+}
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -17,6 +29,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  static const String _temporaryUnlockedKey = 'temporary_unlocked_packages_csv';
   String selectedDurationType = 'Días';
   double selectedValue = 7;
 
@@ -30,12 +43,23 @@ class _HomeScreenState extends State<HomeScreen> {
   final UsageAccessService _usageAccessService = UsageAccessService();
   bool hasUsagePermission = false;
   String currentForegroundApp = 'No detectada';
+  List<_TemporaryUnlockInfo> temporaryUnlockedApps = [];
+  Timer? _temporaryUnlockTimer;
+  final Map<String, String> _appNameCache = {};
+  bool _isResolvingAppNames = false;
 
   @override
   void initState() {
     super.initState();
     _loadSavedData();
     _checkUsagePermission();
+    _startTemporaryUnlockTimer();
+  }
+
+  @override
+  void dispose() {
+    _temporaryUnlockTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadSavedData() async {
@@ -66,7 +90,89 @@ class _HomeScreenState extends State<HomeScreen> {
       isLoading = false;
     });
 
+    _seedAppNameCacheFromKnownData();
     await _saveBlockedPackagesForAndroid();
+    await _loadTemporaryUnlockedApps();
+  }
+
+  void _seedAppNameCacheFromKnownData() {
+    var changed = false;
+
+    for (final app in selectedApps) {
+      final packageName = (app['packageName'] ?? '').trim();
+      final appName = (app['appName'] ?? '').trim();
+      if (packageName.isEmpty || appName.isEmpty) continue;
+      if (_appNameCache[packageName] == appName) continue;
+
+      _appNameCache[packageName] = appName;
+      changed = true;
+    }
+
+    for (final block in activeBlocks) {
+      final packageName = block.packageName.trim();
+      final appName = block.appName.trim();
+      if (packageName.isEmpty || appName.isEmpty) continue;
+      if (_appNameCache[packageName] == appName) continue;
+
+      _appNameCache[packageName] = appName;
+      changed = true;
+    }
+
+    if (changed && mounted) {
+      setState(() {});
+    }
+  }
+
+  String _displayNameForPackage(String packageName) {
+    final normalized = packageName.trim();
+    if (normalized.isEmpty) return packageName;
+    return _appNameCache[normalized] ?? normalized;
+  }
+
+  Future<void> _resolveTemporaryUnlockedAppNames() async {
+    if (_isResolvingAppNames) return;
+
+    _seedAppNameCacheFromKnownData();
+
+    final missingPackages = temporaryUnlockedApps
+        .map((item) => item.packageName.trim())
+        .where((pkg) => pkg.isNotEmpty && !_appNameCache.containsKey(pkg))
+        .toSet();
+
+    if (missingPackages.isEmpty) return;
+
+    _isResolvingAppNames = true;
+    try {
+      final installedApps = await InstalledApps.getInstalledApps(
+        excludeSystemApps: false,
+        excludeNonLaunchableApps: false,
+        withIcon: false,
+      );
+
+      if (!mounted) return;
+
+      var changed = false;
+      for (final app in installedApps) {
+        final packageName = app.packageName.trim();
+        if (!missingPackages.contains(packageName)) continue;
+
+        final appName = app.name.trim();
+        if (appName.isEmpty) continue;
+
+        if (_appNameCache[packageName] != appName) {
+          _appNameCache[packageName] = appName;
+          changed = true;
+        }
+      }
+
+      if (changed && mounted) {
+        setState(() {});
+      }
+    } catch (_) {
+      // Fallback: keep using packageName in UI.
+    } finally {
+      _isResolvingAppNames = false;
+    }
   }
 
   Future<void> _saveData() async {
@@ -146,6 +252,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ..clear()
           ..addAll(result);
       });
+      _seedAppNameCacheFromKnownData();
       await _saveData();
     }
   }
@@ -177,6 +284,68 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (_) => const PendingRequestsScreen(),
       ),
     );
+    await _loadTemporaryUnlockedApps();
+  }
+
+  void _startTemporaryUnlockTimer() {
+    _temporaryUnlockTimer?.cancel();
+    _temporaryUnlockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      setState(() {
+        temporaryUnlockedApps = temporaryUnlockedApps
+            .where((item) => item.unlockedUntilMillis > now)
+            .toList();
+      });
+    });
+  }
+
+  Future<void> _loadTemporaryUnlockedApps() async {
+    final prefs = await SharedPreferences.getInstance();
+    final csv = prefs.getString(_temporaryUnlockedKey) ?? '';
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final latestByPackage = <String, int>{};
+
+    for (final raw in csv.split(',')) {
+      final entry = raw.trim();
+      if (entry.isEmpty) continue;
+
+      final separatorIndex = entry.indexOf('|');
+      if (separatorIndex <= 0) continue;
+
+      final packageName = entry.substring(0, separatorIndex).trim();
+      final unlockedUntil = int.tryParse(entry.substring(separatorIndex + 1).trim());
+      if (packageName.isEmpty || unlockedUntil == null) continue;
+      if (unlockedUntil <= now) continue;
+
+      final existing = latestByPackage[packageName];
+      if (existing == null || unlockedUntil > existing) {
+        latestByPackage[packageName] = unlockedUntil;
+      }
+    }
+
+    final loaded = latestByPackage.entries
+        .map(
+          (entry) => _TemporaryUnlockInfo(
+            packageName: entry.key,
+            unlockedUntilMillis: entry.value,
+          ),
+        )
+        .toList()
+      ..sort((a, b) => a.unlockedUntilMillis.compareTo(b.unlockedUntilMillis));
+
+    if (!mounted) return;
+    setState(() {
+      temporaryUnlockedApps = loaded;
+    });
+    await _resolveTemporaryUnlockedAppNames();
+  }
+
+  int _remainingMinutes(_TemporaryUnlockInfo info) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final remainingMillis = info.unlockedUntilMillis - now;
+    if (remainingMillis <= 0) return 0;
+    return (remainingMillis / Duration.millisecondsPerMinute).ceil();
   }
 
   String get durationText {
@@ -247,6 +416,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
 
     setState(() {});
+    _seedAppNameCacheFromKnownData();
 
     _showMessage('Bloqueos activados correctamente.');
   }
@@ -276,6 +446,8 @@ class _HomeScreenState extends State<HomeScreen> {
       friendName = null;
       friendEmail = null;
       activeBlocks.clear();
+      temporaryUnlockedApps.clear();
+      _appNameCache.clear();
       currentForegroundApp = 'No detectada';
     });
 
@@ -408,6 +580,25 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
+            if (temporaryUnlockedApps.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              const Text(
+                'Desbloqueos temporales activos',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              ...temporaryUnlockedApps.map((item) {
+                final remaining = _remainingMinutes(item);
+                return Card(
+                  child: ListTile(
+                    title: Text(_displayNameForPackage(item.packageName)),
+                    subtitle: Text(
+                      'Package: ${item.packageName}\nTiempo restante: $remaining min',
+                    ),
+                  ),
+                );
+              }),
+            ],
             const SizedBox(height: 24),
             const Text(
               'Detección de app en uso',
