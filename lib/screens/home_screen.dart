@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:async';
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:installed_apps/installed_apps.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -21,6 +22,18 @@ class _TemporaryUnlockInfo {
   });
 }
 
+class _PendingRequestRecord {
+  final String packageName;
+  final int? requestedAtMillis;
+  final String? requestId;
+
+  const _PendingRequestRecord({
+    required this.packageName,
+    required this.requestedAtMillis,
+    required this.requestId,
+  });
+}
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -30,6 +43,9 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   static const String _temporaryUnlockedKey = 'temporary_unlocked_packages_csv';
+  static const String _pendingRequestsKey = 'pending_unlock_requests_csv';
+  static const String _approvedRequestIdsKey = 'approved_unlock_request_ids_csv';
+  static const int _defaultDeepLinkUnlockMinutes = 60;
   String selectedDurationType = 'Días';
   double selectedValue = 7;
 
@@ -47,6 +63,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Timer? _temporaryUnlockTimer;
   final Map<String, String> _appNameCache = {};
   bool _isResolvingAppNames = false;
+  final AppLinks _appLinks = AppLinks();
+  StreamSubscription<Uri>? _deepLinkSubscription;
+  String? _lastHandledDeepLink;
 
   @override
   void initState() {
@@ -54,11 +73,13 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadSavedData();
     _checkUsagePermission();
     _startTemporaryUnlockTimer();
+    _setupDeepLinks();
   }
 
   @override
   void dispose() {
     _temporaryUnlockTimer?.cancel();
+    _deepLinkSubscription?.cancel();
     super.dispose();
   }
 
@@ -93,6 +114,209 @@ class _HomeScreenState extends State<HomeScreen> {
     _seedAppNameCacheFromKnownData();
     await _saveBlockedPackagesForAndroid();
     await _loadTemporaryUnlockedApps();
+  }
+
+  Future<void> _setupDeepLinks() async {
+    try {
+      final initialUri = await _appLinks.getInitialLink();
+      if (initialUri != null) {
+        await _handleIncomingDeepLink(initialUri);
+      }
+
+      _deepLinkSubscription = _appLinks.uriLinkStream.listen(
+        (uri) {
+          _handleIncomingDeepLink(uri);
+        },
+        onError: (_) {
+          // Keep default behavior if deep links fail.
+        },
+      );
+    } catch (_) {
+      // Keep default behavior if deep links fail.
+    }
+  }
+
+  Future<void> _handleIncomingDeepLink(Uri uri) async {
+    if (!_isApprovalDeepLink(uri)) return;
+
+    final rawUri = uri.toString();
+    if (_lastHandledDeepLink == rawUri) return;
+    _lastHandledDeepLink = rawUri;
+
+    await _applyDeepLinkApproval(uri);
+  }
+
+  bool _isApprovalDeepLink(Uri uri) {
+    final normalizedPath = uri.path.startsWith('/') ? uri.path : '/${uri.path}';
+    return uri.scheme == 'changeyourlife' &&
+        uri.host == 'unlock' &&
+        normalizedPath == '/approve';
+  }
+
+  Future<void> _applyDeepLinkApproval(Uri uri) async {
+    final packageName = (uri.queryParameters['package'] ?? '').trim();
+    final requestId = (uri.queryParameters['requestId'] ?? '').trim();
+    final requestedAt = int.tryParse(uri.queryParameters['requestedAt'] ?? '');
+    final minutesRaw = int.tryParse(uri.queryParameters['minutes'] ?? '');
+    final contractVersion = (uri.queryParameters['v'] ?? '').trim();
+    final minutes = (minutesRaw != null && minutesRaw > 0)
+        ? minutesRaw
+        : _defaultDeepLinkUnlockMinutes;
+
+    if (contractVersion.isNotEmpty && contractVersion != '1') {
+      if (mounted) {
+        _showMessage('Link de aprobacion no compatible.');
+      }
+      return;
+    }
+
+    if (packageName.isEmpty) {
+      if (mounted) {
+        _showMessage('Link de aprobacion invalido: falta package.');
+      }
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final approvedRequestIds = _parseCsvSet(
+      prefs.getString(_approvedRequestIdsKey) ?? '',
+    );
+    if (requestId.isNotEmpty && approvedRequestIds.contains(requestId)) {
+      if (mounted) {
+        _showMessage('Esta solicitud ya fue aprobada anteriormente.');
+      }
+      return;
+    }
+
+    final pendingRequests = _parsePendingRequestsCsv(
+      prefs.getString(_pendingRequestsKey) ?? '',
+    );
+    final removedByPackage = pendingRequests.remove(packageName) != null;
+    if (!removedByPackage && requestId.isNotEmpty) {
+      pendingRequests.removeWhere((_, request) {
+        if (request.requestId != requestId) return false;
+        if (requestedAt == null) return true;
+        return request.requestedAtMillis == requestedAt;
+      });
+    }
+    await prefs.setString(
+      _pendingRequestsKey,
+      _serializePendingRequestsCsv(pendingRequests),
+    );
+
+    final temporaryUnlocked = _parseTemporaryUnlockedCsv(
+      prefs.getString(_temporaryUnlockedKey) ?? '',
+    );
+    final unlockUntil = DateTime.now()
+        .add(Duration(minutes: minutes))
+        .millisecondsSinceEpoch;
+    temporaryUnlocked[packageName] = unlockUntil;
+    await prefs.setString(
+      _temporaryUnlockedKey,
+      _serializeTemporaryUnlockedCsv(temporaryUnlocked),
+    );
+    if (requestId.isNotEmpty) {
+      approvedRequestIds.add(requestId);
+      await prefs.setString(
+        _approvedRequestIdsKey,
+        _serializeCsvSet(approvedRequestIds),
+      );
+    }
+
+    await _loadTemporaryUnlockedApps();
+
+    if (!mounted) return;
+    _showMessage('Aprobacion local aplicada por $minutes min para $packageName.');
+  }
+
+  Map<String, _PendingRequestRecord> _parsePendingRequestsCsv(String csv) {
+    final requests = <String, _PendingRequestRecord>{};
+    if (csv.trim().isEmpty) return requests;
+
+    for (final raw in csv.split(',')) {
+      final entry = raw.trim();
+      if (entry.isEmpty) continue;
+
+      final parts = entry.split('|');
+      final packageName = parts.first.trim();
+      if (packageName.isEmpty) continue;
+
+      final timestamp = parts.length > 1 ? int.tryParse(parts[1].trim()) : null;
+      final requestId = parts.length > 2 ? parts[2].trim() : null;
+
+      final parsed = _PendingRequestRecord(
+        packageName: packageName,
+        requestedAtMillis: timestamp,
+        requestId: requestId == null || requestId.isEmpty ? null : requestId,
+      );
+
+      final existing = requests[packageName];
+      if (existing == null) {
+        requests[packageName] = parsed;
+        continue;
+      }
+
+      final existingTs = existing.requestedAtMillis ?? 0;
+      final parsedTs = parsed.requestedAtMillis ?? 0;
+      if (parsedTs > existingTs) {
+        requests[packageName] = parsed;
+      }
+    }
+
+    return requests;
+  }
+
+  String _serializePendingRequestsCsv(Map<String, _PendingRequestRecord> requests) {
+    return requests.values.map((request) {
+      final ts = request.requestedAtMillis ?? DateTime.now().millisecondsSinceEpoch;
+      final requestId = request.requestId?.trim() ?? '';
+      if (requestId.isEmpty) {
+        return '${request.packageName}|$ts';
+      }
+      return '${request.packageName}|$ts|$requestId';
+    }).join(',');
+  }
+
+  Map<String, int> _parseTemporaryUnlockedCsv(String csv) {
+    final unlocked = <String, int>{};
+    if (csv.trim().isEmpty) return unlocked;
+
+    for (final raw in csv.split(',')) {
+      final entry = raw.trim();
+      if (entry.isEmpty || !entry.contains('|')) continue;
+
+      final separatorIndex = entry.indexOf('|');
+      final packageName = entry.substring(0, separatorIndex).trim();
+      final until = int.tryParse(entry.substring(separatorIndex + 1).trim());
+      if (packageName.isEmpty || until == null) continue;
+
+      final existing = unlocked[packageName];
+      if (existing == null || until > existing) {
+        unlocked[packageName] = until;
+      }
+    }
+
+    return unlocked;
+  }
+
+  String _serializeTemporaryUnlockedCsv(Map<String, int> unlocked) {
+    return unlocked.entries.map((entry) => '${entry.key}|${entry.value}').join(',');
+  }
+
+  Set<String> _parseCsvSet(String csv) {
+    final values = <String>{};
+    if (csv.trim().isEmpty) return values;
+
+    for (final raw in csv.split(',')) {
+      final value = raw.trim();
+      if (value.isEmpty) continue;
+      values.add(value);
+    }
+    return values;
+  }
+
+  String _serializeCsvSet(Set<String> values) {
+    return values.map((value) => value.trim()).where((value) => value.isNotEmpty).join(',');
   }
 
   void _seedAppNameCacheFromKnownData() {
@@ -287,6 +511,69 @@ class _HomeScreenState extends State<HomeScreen> {
     await _loadTemporaryUnlockedApps();
   }
 
+  Future<void> _openDeepLinkTestTool() async {
+    final controller = TextEditingController();
+    try {
+      final input = await showDialog<String>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('Procesar link de aprobacion'),
+            content: TextField(
+              controller: controller,
+              maxLines: 5,
+              decoration: const InputDecoration(
+                hintText: 'Pegá el link changeyourlife://...',
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(controller.text),
+                child: const Text('Procesar'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (input == null) return;
+
+      final candidate = _extractDeepLinkCandidate(input);
+      if (candidate == null) {
+        _showMessage('No se encontro un deep link valido.');
+        return;
+      }
+
+      final uri = Uri.tryParse(candidate);
+      if (uri == null) {
+        _showMessage('Formato de deep link invalido.');
+        return;
+      }
+
+      if (!_isApprovalDeepLink(uri)) {
+        _showMessage('El link no corresponde a aprobacion local.');
+        return;
+      }
+
+      await _handleIncomingDeepLink(uri);
+    } finally {
+      controller.dispose();
+    }
+  }
+
+  String? _extractDeepLinkCandidate(String input) {
+    final trimmed = input.trim();
+    if (trimmed.isEmpty) return null;
+    if (trimmed.startsWith('changeyourlife://')) return trimmed;
+
+    final match = RegExp(r'changeyourlife://\S+').firstMatch(trimmed);
+    return match?.group(0);
+  }
+
   void _startTemporaryUnlockTimer() {
     _temporaryUnlockTimer?.cancel();
     _temporaryUnlockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -438,6 +725,7 @@ class _HomeScreenState extends State<HomeScreen> {
     await prefs.remove('blocked_packages_csv');
     await prefs.remove('pending_unlock_requests_csv');
     await prefs.remove('temporary_unlocked_packages_csv');
+    await prefs.remove(_approvedRequestIdsKey);
 
     setState(() {
       selectedDurationType = 'Días';
@@ -566,6 +854,11 @@ class _HomeScreenState extends State<HomeScreen> {
             OutlinedButton(
               onPressed: _openPendingRequestsScreen,
               child: const Text('Ver solicitudes pendientes'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton(
+              onPressed: _openDeepLinkTestTool,
+              child: const Text('Procesar link (test local)'),
             ),
             const SizedBox(height: 10),
             if (friendName != null &&

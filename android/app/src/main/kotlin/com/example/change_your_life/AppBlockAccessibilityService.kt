@@ -11,6 +11,7 @@ class AppBlockAccessibilityService : AccessibilityService() {
 
     private var lastBlockedPackage: String? = null
     private var lastLaunchTime: Long = 0L
+    private val relaunchCooldownMillis = 2000L
     private val prefsFileName = "FlutterSharedPreferences"
     private val blockedPackagesKey = "flutter.blocked_packages_csv"
     private val temporaryUnlockedPackagesKey = "flutter.temporary_unlocked_packages_csv"
@@ -101,8 +102,18 @@ class AppBlockAccessibilityService : AccessibilityService() {
         if (blockedPackages.contains(openedPackage) &&
             !isTemporarilyUnlocked(openedPackage, now)
         ) {
-            // Evita abrir muchas veces seguidas la pantalla de bloqueo
-            if (lastBlockedPackage == openedPackage && now - lastLaunchTime < 1500) {
+            // Evita reentrada cuando BlockActivity ya esta visible.
+            if (BlockActivity.isVisible) {
+                return
+            }
+
+            // Evita abrir muchas veces seguidas la pantalla de bloqueo.
+            if (now - lastLaunchTime < relaunchCooldownMillis) {
+                return
+            }
+
+            // Refuerzo por paquete para evitar rafagas del mismo evento.
+            if (lastBlockedPackage == openedPackage && now - lastLaunchTime < relaunchCooldownMillis) {
                 return
             }
 
@@ -110,7 +121,11 @@ class AppBlockAccessibilityService : AccessibilityService() {
             lastLaunchTime = now
 
             val intent = Intent(this, BlockActivity::class.java)
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            intent.addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP
+            )
             intent.putExtra("appName", getAppLabel(openedPackage))
             intent.putExtra("packageName", openedPackage)
             startActivity(intent)

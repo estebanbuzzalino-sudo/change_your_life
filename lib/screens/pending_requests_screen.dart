@@ -112,10 +112,11 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
 
   PendingUnlockRequest? _parsePendingEntry(String entry) {
     if (entry.contains('|')) {
-      final separatorIndex = entry.indexOf('|');
-      final packageName = entry.substring(0, separatorIndex).trim();
+      final parts = entry.split('|');
+      final packageName = parts.first.trim();
       if (packageName.isEmpty) return null;
-      final timestamp = int.tryParse(entry.substring(separatorIndex + 1).trim());
+      final timestampText = parts.length > 1 ? parts[1].trim() : '';
+      final timestamp = int.tryParse(timestampText);
       return PendingUnlockRequest(
         packageName: packageName,
         requestedAtMillis: timestamp,

@@ -12,6 +12,7 @@
         <activity
             android:name=".BlockActivity"
             android:exported="false"
+            android:launchMode="singleTask"
             android:noHistory="true"
             android:excludeFromRecents="true"
             android:finishOnTaskLaunch="true"
@@ -33,6 +34,16 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="changeyourlife"
+                    android:host="unlock"
+                    android:pathPrefix="/approve" />
             </intent-filter>
         </activity>
 
