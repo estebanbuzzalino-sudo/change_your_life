@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { createHash } from "https://deno.land/std@0.224.0/crypto/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -104,7 +103,10 @@ serve(async (req) => {
     const resendApiKey = Deno.env.get("RESEND_API_KEY")!;
     const fromEmail = Deno.env.get("FROM_EMAIL")!;
     const approvalBaseUrl =
-      Deno.env.get("APPROVAL_BASE_URL") ?? "https://api.changeyourlife.app/v1/approvals";
+      Deno.env.get("APPROVAL_BASE_URL") ?? "https://oggqvcjtvfgyagaisvmj.functions.supabase.co/approvals";
+    const approvalApiBaseUrl =
+      Deno.env.get("APPROVAL_API_BASE_URL") ?? "https://oggqvcjtvfgyagaisvmj.functions.supabase.co";
+    const approvalWebBaseUrl = Deno.env.get("APPROVAL_WEB_BASE_URL") ?? "";
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
@@ -137,7 +139,19 @@ serve(async (req) => {
       });
     }
 
-    const approvalLink = `${approvalBaseUrl}/${token}`;
+    const approvalApiUrl = new URL(
+      `${approvalBaseUrl.replace(/\/+$/, "")}/${token}`,
+    );
+    approvalApiUrl.searchParams.set("view", "html");
+
+    let approvalLink = approvalApiUrl.toString();
+    if (approvalWebBaseUrl.trim().length > 0) {
+      const approvalWebUrl = new URL(approvalWebBaseUrl);
+      approvalWebUrl.searchParams.set("token", token);
+      approvalWebUrl.searchParams.set("v", "1");
+      approvalWebUrl.searchParams.set("apiBase", approvalApiBaseUrl);
+      approvalLink = approvalWebUrl.toString();
+    }
 
     const emailHtml = `
       <h2>Solicitud de desbloqueo temporal</h2>
@@ -154,6 +168,9 @@ serve(async (req) => {
       </p>
       <p>Si el botón no funciona, copiá este link:</p>
       <p>${approvalLink}</p>
+      <p style="font-size:12px;color:#6b7280;">
+        Fallback API: ${approvalApiUrl.toString()}
+      </p>
     `;
 
     const resendResponse = await fetch("https://api.resend.com/emails", {

@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Aprobar desbloqueo</title>
+  <style>
+    :root {
+      color-scheme: light;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Roboto, Arial, sans-serif;
+      background: #f3f4f6;
+      color: #111827;
+    }
+    .wrap {
+      max-width: 720px;
+      margin: 32px auto;
+      padding: 0 16px;
+    }
+    .card {
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      border-radius: 14px;
+      padding: 20px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 24px;
+      line-height: 1.2;
+    }
+    .status {
+      display: inline-block;
+      margin-bottom: 14px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-weight: 600;
+      font-size: 13px;
+      border: 1px solid #1d4ed8;
+      color: #1d4ed8;
+      background: #eff6ff;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 170px 1fr;
+      gap: 8px 10px;
+      margin: 12px 0 16px;
+    }
+    .label {
+      font-weight: 600;
+      color: #4b5563;
+    }
+    .value {
+      color: #111827;
+      word-break: break-word;
+    }
+    .msg {
+      margin: 12px 0 16px;
+      color: #374151;
+    }
+    .button {
+      appearance: none;
+      border: 0;
+      border-radius: 10px;
+      background: #2563eb;
+      color: #fff;
+      padding: 12px 16px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .button:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+    .hint {
+      margin-top: 12px;
+      color: #6b7280;
+      font-size: 13px;
+    }
+    .error {
+      color: #991b1b;
+    }
+    .ok {
+      color: #0f766e;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Solicitud de desbloqueo temporal</h1>
+      <div id="statusChip" class="status">Cargando...</div>
+
+      <div class="grid">
+        <div class="label">App</div>
+        <div id="appName" class="value">-</div>
+
+        <div class="label">Solicitante</div>
+        <div id="requesterName" class="value">-</div>
+
+        <div class="label">Duración</div>
+        <div id="minutes" class="value">-</div>
+      </div>
+
+      <div id="message" class="msg">Validando solicitud...</div>
+
+      <button id="approveBtn" class="button" style="display:none;">Aprobar desbloqueo</button>
+      <div id="hint" class="hint"></div>
+    </div>
+  </div>
+
+  <script>
+    const statusChip = document.getElementById("statusChip");
+    const appNameEl = document.getElementById("appName");
+    const requesterNameEl = document.getElementById("requesterName");
+    const minutesEl = document.getElementById("minutes");
+    const messageEl = document.getElementById("message");
+    const approveBtn = document.getElementById("approveBtn");
+    const hintEl = document.getElementById("hint");
+
+    const params = new URLSearchParams(window.location.search);
+    const token = (params.get("token") || "").trim();
+    const apiBase = (params.get("apiBase") || "https://oggqvcjtvfgyagaisvmj.functions.supabase.co").replace(/\/+$/, "");
+
+    function setStatus(text, tone) {
+      statusChip.textContent = text;
+      statusChip.style.borderColor = tone === "ok" ? "#0f766e" : tone === "error" ? "#991b1b" : "#1d4ed8";
+      statusChip.style.color = tone === "ok" ? "#0f766e" : tone === "error" ? "#991b1b" : "#1d4ed8";
+      statusChip.style.background = tone === "ok" ? "#ecfdf5" : tone === "error" ? "#fef2f2" : "#eff6ff";
+    }
+
+    function setInfo(appName, requesterName, minutes) {
+      appNameEl.textContent = appName || "-";
+      requesterNameEl.textContent = requesterName || "-";
+      minutesEl.textContent = Number.isFinite(minutes) ? `${minutes} minutos` : "-";
+    }
+
+    function showError(message) {
+      setStatus("No disponible", "error");
+      messageEl.textContent = message;
+      messageEl.className = "msg error";
+      approveBtn.style.display = "none";
+      hintEl.textContent = "Revisá el link o pedí una nueva solicitud.";
+    }
+
+    async function fetchJson(url, options) {
+      const response = await fetch(url, options);
+      const contentType = response.headers.get("content-type") || "";
+      const body = contentType.includes("application/json")
+        ? await response.json()
+        : { ok: false, error: { message: await response.text() } };
+      return { response, body };
+    }
+
+    async function loadRequest() {
+      if (!token) {
+        showError("Falta el token en el link.");
+        return;
+      }
+
+      const url = `${apiBase}/approvals/${encodeURIComponent(token)}`;
+      const { response, body } = await fetchJson(url, {
+        method: "GET",
+        headers: { "Accept": "application/json" }
+      });
+
+      if (!response.ok || !body.ok) {
+        const msg = body?.error?.message || `No se pudo validar (${response.status}).`;
+        showError(msg);
+        return;
+      }
+
+      const data = body.data || {};
+      setInfo(data.appName, data.requesterName, Number(data.minutes));
+
+      if (data.status === "pending_approval") {
+        setStatus("Pendiente de aprobación", "pending");
+        messageEl.textContent = "Si aprobás, se habilita el desbloqueo temporal.";
+        messageEl.className = "msg";
+        approveBtn.style.display = "inline-block";
+        hintEl.textContent = "Este enlace es de un solo uso.";
+        return;
+      }
+
+      if (data.status === "approved") {
+        setStatus("Ya aprobado", "ok");
+        messageEl.textContent = "Esta solicitud ya fue aprobada.";
+        messageEl.className = "msg ok";
+        approveBtn.style.display = "none";
+        hintEl.textContent = "";
+        return;
+      }
+
+      showError(`La solicitud está en estado '${data.status || "desconocido"}'.`);
+    }
+
+    approveBtn.addEventListener("click", async () => {
+      approveBtn.disabled = true;
+      approveBtn.textContent = "Aprobando...";
+
+      const url = `${apiBase}/approvals/${encodeURIComponent(token)}/approve`;
+      const { response, body } = await fetchJson(url, {
+        method: "POST",
+        headers: { "Accept": "application/json" }
+      });
+
+      if (response.ok && body.ok) {
+        const data = body.data || {};
+        setStatus("Aprobado", "ok");
+        messageEl.textContent = `Desbloqueo activo hasta ${data.unlockUntil || "-"}.`;
+        messageEl.className = "msg ok";
+        approveBtn.style.display = "none";
+        hintEl.textContent = "";
+        return;
+      }
+
+      const msg = body?.error?.message || `No se pudo aprobar (${response.status}).`;
+      showError(msg);
+      approveBtn.disabled = false;
+      approveBtn.textContent = "Aprobar desbloqueo";
+    });
+
+    loadRequest().catch((err) => {
+      showError(err?.message || "Error inesperado.");
+    });
+  </script>
+</body>
+</html>
