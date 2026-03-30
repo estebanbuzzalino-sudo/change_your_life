@@ -11,7 +11,8 @@ class AppBlockAccessibilityService : AccessibilityService() {
 
     private var lastBlockedPackage: String? = null
     private var lastLaunchTime: Long = 0L
-    private val relaunchCooldownMillis = 2000L
+    // Cooldown corto para evitar parpadeo, sin dejar "huecos" de desbloqueo.
+    private val relaunchCooldownMillis = 500L
     private val prefsFileName = "FlutterSharedPreferences"
     private val blockedPackagesKey = "flutter.blocked_packages_csv"
     private val temporaryUnlockedPackagesKey = "flutter.temporary_unlocked_packages_csv"
@@ -112,10 +113,10 @@ class AppBlockAccessibilityService : AccessibilityService() {
                 return
             }
 
-            // Refuerzo por paquete para evitar rafagas del mismo evento.
-            if (lastBlockedPackage == openedPackage && now - lastLaunchTime < relaunchCooldownMillis) {
-                return
-            }
+            // Debounce por paquete: evita rafagas del mismo evento.
+            if (lastBlockedPackage == openedPackage &&
+                now - lastLaunchTime < relaunchCooldownMillis
+            ) return
 
             lastBlockedPackage = openedPackage
             lastLaunchTime = now
