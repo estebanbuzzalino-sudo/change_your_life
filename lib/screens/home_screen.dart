@@ -60,6 +60,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool hasUsagePermission = false;
   String currentForegroundApp = 'No detectada';
   List<_TemporaryUnlockInfo> temporaryUnlockedApps = [];
+  List<_PendingRequestRecord> pendingRequests = [];
   Timer? _temporaryUnlockTimer;
   final Map<String, String> _appNameCache = {};
   bool _isResolvingAppNames = false;
@@ -95,9 +96,13 @@ class _HomeScreenState extends State<HomeScreen> {
     final decodedBlocks = savedBlocks
         .map((item) => AppBlock.fromMap(jsonDecode(item)))
         .toList();
+    final savedDurationType = prefs.getString('durationType');
+    final normalizedDurationType = savedDurationType == 'DÃ­as'
+        ? 'Días'
+        : (savedDurationType ?? 'Días');
 
     setState(() {
-      selectedDurationType = prefs.getString('durationType') ?? 'Días';
+      selectedDurationType = normalizedDurationType;
       selectedValue = prefs.getDouble('durationValue') ?? 7;
 
       selectedApps
@@ -114,6 +119,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _seedAppNameCacheFromKnownData();
     await _saveBlockedPackagesForAndroid();
     await _loadTemporaryUnlockedApps();
+    await _loadPendingRequests();
   }
 
   Future<void> _setupDeepLinks() async {
@@ -224,6 +230,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     await _loadTemporaryUnlockedApps();
+    await _loadPendingRequests();
 
     if (!mounted) return;
     _showMessage('Aprobacion local aplicada por $minutes min para $packageName.');
@@ -360,6 +367,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final missingPackages = temporaryUnlockedApps
         .map((item) => item.packageName.trim())
+        .followedBy(pendingRequests.map((item) => item.packageName.trim()))
         .where((pkg) => pkg.isNotEmpty && !_appNameCache.containsKey(pkg))
         .toSet();
 
@@ -509,6 +517,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
     await _loadTemporaryUnlockedApps();
+    await _loadPendingRequests();
   }
 
   Future<void> _openDeepLinkTestTool() async {
@@ -624,6 +633,21 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
     setState(() {
       temporaryUnlockedApps = loaded;
+    });
+    await _resolveTemporaryUnlockedAppNames();
+  }
+
+  Future<void> _loadPendingRequests() async {
+    final prefs = await SharedPreferences.getInstance();
+    final csv = prefs.getString(_pendingRequestsKey) ?? '';
+    final loaded = _parsePendingRequestsCsv(csv).values.toList()
+      ..sort(
+        (a, b) => (b.requestedAtMillis ?? 0).compareTo(a.requestedAtMillis ?? 0),
+      );
+
+    if (!mounted) return;
+    setState(() {
+      pendingRequests = loaded;
     });
     await _resolveTemporaryUnlockedAppNames();
   }
@@ -756,6 +780,80 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  String _formatDate(DateTime value) {
+    final day = value.day.toString().padLeft(2, '0');
+    final month = value.month.toString().padLeft(2, '0');
+    return '$day/$month/${value.year}';
+  }
+
+  String _formatDateTime(DateTime value) {
+    final day = value.day.toString().padLeft(2, '0');
+    final month = value.month.toString().padLeft(2, '0');
+    final hour = value.hour.toString().padLeft(2, '0');
+    final minute = value.minute.toString().padLeft(2, '0');
+    return '$day/$month/${value.year} $hour:$minute';
+  }
+
+  String _pendingRequestedAtText(_PendingRequestRecord request) {
+    final requestedAt = request.requestedAtMillis;
+    if (requestedAt == null) return 'Pendiente de revision';
+
+    final requestedDate = DateTime.fromMillisecondsSinceEpoch(requestedAt);
+    return 'Solicitado el ${_formatDateTime(requestedDate)}';
+  }
+
+  Widget _buildSectionHeader({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, size: 22),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: const TextStyle(fontSize: 13, color: Colors.black54),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmptyStateCard({
+    required IconData icon,
+    required String message,
+  }) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            Icon(icon, color: Colors.black54),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(color: Colors.black87),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final maxValue = selectedDurationType == 'Días' ? 30.0 : 12.0;
@@ -786,51 +884,67 @@ class _HomeScreenState extends State<HomeScreen> {
               'Reducí redes sociales y convertí ese tiempo en hábitos saludables.',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
-            const SizedBox(height: 24),
-            const Text(
-              'Tipo de duración',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment<String>(
-                  value: 'Días',
-                  label: Text('Días'),
-                ),
-                ButtonSegment<String>(
-                  value: 'Meses',
-                  label: Text('Meses'),
-                ),
-              ],
-              selected: {selectedDurationType},
-              onSelectionChanged: (newSelection) async {
-                setState(() {
-                  selectedDurationType = newSelection.first;
-                  selectedValue = selectedDurationType == 'Días' ? 7 : 1;
-                });
-                await _saveData();
-              },
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Duración elegida: $durationText',
-              style: const TextStyle(fontSize: 16),
-            ),
-            Slider(
-              value: selectedValue,
-              min: 1,
-              max: maxValue,
-              divisions: divisions,
-              label: durationText,
-              onChanged: (value) async {
-                setState(() {
-                  selectedValue = value;
-                });
-                await _saveData();
-              },
-            ),
             const SizedBox(height: 20),
+            _buildSectionHeader(
+              icon: Icons.tune_rounded,
+              title: 'Configuración del bloqueo',
+              subtitle: 'Definí la duración, apps y amigo responsable.',
+            ),
+            const SizedBox(height: 10),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'Tipo de duración',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment<String>(
+                          value: 'Días',
+                          label: Text('Días'),
+                        ),
+                        ButtonSegment<String>(
+                          value: 'Meses',
+                          label: Text('Meses'),
+                        ),
+                      ],
+                      selected: {selectedDurationType},
+                      onSelectionChanged: (newSelection) async {
+                        setState(() {
+                          selectedDurationType = newSelection.first;
+                          selectedValue = selectedDurationType == 'Días' ? 7 : 1;
+                        });
+                        await _saveData();
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Duración elegida: $durationText',
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                    Slider(
+                      value: selectedValue,
+                      min: 1,
+                      max: maxValue,
+                      divisions: divisions,
+                      label: durationText,
+                      onChanged: (value) async {
+                        setState(() {
+                          selectedValue = value;
+                        });
+                        await _saveData();
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
             ElevatedButton(
               onPressed: _openAppsSelection,
               child: const Text('Elegir Apps a Bloquear'),
@@ -845,7 +959,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 12),
             ElevatedButton(
               onPressed: _openFriendScreen,
               child: const Text('Elegir Amigo Responsable'),
@@ -873,29 +987,98 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-            if (temporaryUnlockedApps.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              const Text(
-                'Desbloqueos temporales activos',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
+            const SizedBox(height: 24),
+            _buildSectionHeader(
+              icon: Icons.lock_outline_rounded,
+              title: 'Apps bloqueadas',
+              subtitle: 'Estas apps están con bloqueo activo en este momento.',
+            ),
+            const SizedBox(height: 8),
+            if (activeBlocks.isEmpty)
+              _buildEmptyStateCard(
+                icon: Icons.lock_open_rounded,
+                message:
+                    'Todavía no hay apps bloqueadas. Elegí apps y tocá ACTIVAR BLOQUEO.',
+              )
+            else
+              ...activeBlocks.map((block) {
+                final appName = block.appName.trim().isNotEmpty
+                    ? block.appName.trim()
+                    : _displayNameForPackage(block.packageName);
+                return Card(
+                  child: ListTile(
+                    onTap: () => _openBlockScreen(block),
+                    title: Text(appName),
+                    subtitle: Text(
+                      'Bloqueada hasta ${_formatDate(block.endDate)}\nID app: ${block.packageName}',
+                    ),
+                    trailing: const Chip(
+                      label: Text('Bloqueada'),
+                      backgroundColor: Color(0xFFFFEBEE),
+                    ),
+                  ),
+                );
+              }),
+            const SizedBox(height: 20),
+            _buildSectionHeader(
+              icon: Icons.hourglass_bottom_rounded,
+              title: 'Desbloqueos temporales activos',
+              subtitle: 'Apps con acceso temporal aprobado.',
+            ),
+            const SizedBox(height: 8),
+            if (temporaryUnlockedApps.isEmpty)
+              _buildEmptyStateCard(
+                icon: Icons.hourglass_empty_rounded,
+                message: 'No hay desbloqueos temporales activos ahora mismo.',
+              )
+            else
               ...temporaryUnlockedApps.map((item) {
                 final remaining = _remainingMinutes(item);
                 return Card(
                   child: ListTile(
                     title: Text(_displayNameForPackage(item.packageName)),
                     subtitle: Text(
-                      'Package: ${item.packageName}\nTiempo restante: $remaining min',
+                      'Tiempo restante: $remaining min\nID app: ${item.packageName}',
+                    ),
+                    trailing: Chip(
+                      label: Text('$remaining min'),
+                      backgroundColor: const Color(0xFFE8F5E9),
                     ),
                   ),
                 );
               }),
-            ],
+            const SizedBox(height: 20),
+            _buildSectionHeader(
+              icon: Icons.mark_email_unread_outlined,
+              title: 'Solicitudes pendientes',
+              subtitle: 'Desbloqueos a la espera de aprobación.',
+            ),
+            const SizedBox(height: 8),
+            if (pendingRequests.isEmpty)
+              _buildEmptyStateCard(
+                icon: Icons.mark_email_read_outlined,
+                message: 'No hay solicitudes pendientes por ahora.',
+              )
+            else
+              ...pendingRequests.map((request) {
+                return Card(
+                  child: ListTile(
+                    title: Text(_displayNameForPackage(request.packageName)),
+                    subtitle: Text(
+                      '${_pendingRequestedAtText(request)}\nID app: ${request.packageName}',
+                    ),
+                    trailing: const Chip(
+                      label: Text('Pendiente'),
+                      backgroundColor: Color(0xFFFFF8E1),
+                    ),
+                  ),
+                );
+              }),
             const SizedBox(height: 24),
-            const Text(
-              'Detección de app en uso',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            _buildSectionHeader(
+              icon: Icons.visibility_outlined,
+              title: 'Detección de app en uso',
+              subtitle: 'Estado de permisos y detección en este dispositivo.',
             ),
             const SizedBox(height: 12),
             Card(
@@ -906,15 +1089,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     Text(
                       hasUsagePermission
-                          ? 'Permiso Usage Access: concedido'
-                          : 'Permiso Usage Access: no concedido',
+                          ? 'Permiso de detección: concedido'
+                          : 'Permiso de detección: no concedido',
                     ),
                     const SizedBox(height: 8),
                     Text('App detectada: $currentForegroundApp'),
                     const SizedBox(height: 12),
                     ElevatedButton(
                       onPressed: _requestUsagePermission,
-                      child: const Text('Dar permiso Usage Access'),
+                      child: const Text('Dar permiso de detección'),
                     ),
                     const SizedBox(height: 8),
                     ElevatedButton(
@@ -926,27 +1109,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            if (activeBlocks.isNotEmpty) ...[
-              Text(
-                'Bloqueos activos (${activeBlocks.length})',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 12),
-              ...activeBlocks.map(
-                (block) => Card(
-                  child: ListTile(
-                    title: Text(block.appName),
-                    subtitle: Text(
-                      'Package: ${block.packageName}\nHasta: ${block.endDate.day}/${block.endDate.month}/${block.endDate.year}',
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 18),
@@ -968,3 +1130,4 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
+
