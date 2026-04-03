@@ -147,9 +147,6 @@
 
         <div class="label">Solicitante</div>
         <div id="requesterName" class="value">-</div>
-
-        <div class="label">Duracion solicitada</div>
-        <div id="requestedDuration" class="value">-</div>
       </div>
 
       <div id="message" class="msg">Validando solicitud...</div>
@@ -198,7 +195,6 @@
     const statusChip = document.getElementById("statusChip");
     const appNameEl = document.getElementById("appName");
     const requesterNameEl = document.getElementById("requesterName");
-    const requestedDurationEl = document.getElementById("requestedDuration");
     const messageEl = document.getElementById("message");
     const approveBtn = document.getElementById("approveBtn");
     const hintEl = document.getElementById("hint");
@@ -219,10 +215,9 @@
       statusChip.style.background = tone === "ok" ? "#ecfdf5" : tone === "error" ? "#fef2f2" : "#eff6ff";
     }
 
-    function setInfo(appName, requesterName, minutes) {
+    function setInfo(appName, requesterName) {
       appNameEl.textContent = appName || "-";
       requesterNameEl.textContent = requesterName || "-";
-      requestedDurationEl.textContent = Number.isFinite(minutes) ? `${minutes} minutos` : "-";
     }
 
     function getSelectedDurationMode() {
@@ -321,10 +316,7 @@
       }
 
       const data = body.data || {};
-      const requestedMinutes = Number.isFinite(Number(data.minutes)) && Number(data.minutes) > 0
-        ? Number(data.minutes)
-        : 60;
-      setInfo(data.appName, data.requesterName, requestedMinutes);
+      setInfo(data.appName, data.requesterName);
       updateDurationPreview();
 
       if (data.status === "pending_approval") {
@@ -375,7 +367,6 @@
         const data = body.data || {};
         setStatus("Aprobado", "ok");
         const durationLabel = data.durationLabel || durationPreviewEl.textContent.replace("Aprobacion seleccionada: ", "");
-        requestedDurationEl.textContent = durationLabel;
         messageEl.textContent = `Desbloqueo aprobado por ${durationLabel}. Activo hasta ${data.unlockUntil || "-"}.`;
         messageEl.className = "msg ok";
         approveBtn.style.display = "none";
