@@ -8,6 +8,23 @@ const corsHeaders = {
 };
 
 const TOKEN_REGEX = /^[a-f0-9]{64}$/i;
+const DEFAULT_UNLOCK_MINUTES = 60;
+const MAX_MINUTES_DURATION = 60 * 24 * 30;
+const MAX_DAYS_DURATION = 30;
+const PERMANENT_UNLOCK_UNTIL_ISO = "2099-12-31T23:59:59.000Z";
+
+type ApprovalDurationInput = {
+  durationMode?: unknown;
+  minutes?: unknown;
+  days?: unknown;
+};
+
+type ResolvedApprovalDuration = {
+  mode: "minutes" | "days" | "permanent";
+  minutesForGrant: number;
+  durationLabel: string;
+  unlockUntil: string;
+};
 
 function generateId(prefix: string) {
   return `${prefix}_${crypto.randomUUID().replace(/-/g, "").slice(0, 20)}`;
@@ -97,12 +114,13 @@ function renderApprovalPage(params: {
   const color = statusColor(params.statusKind);
   const appName = params.appName ? escapeHtml(params.appName) : "-";
   const requesterName = params.requesterName ? escapeHtml(params.requesterName) : "-";
-  const minutes = typeof params.minutes === "number" ? params.minutes : null;
+  const minutes = typeof params.minutes === "number" && params.minutes > 0 ? params.minutes : DEFAULT_UNLOCK_MINUTES;
   const message = params.message ? escapeHtml(params.message) : "";
   const approveActionPath = params.approveActionPath
     ? escapeHtml(params.approveActionPath)
     : "";
   const showApproveButton = Boolean(params.showApproveButton && approveActionPath);
+  const defaultDurationPreview = `Duracion seleccionada: ${minutes} minutos`;
 
   return `<!doctype html>
 <html lang="es">
@@ -179,6 +197,41 @@ function renderApprovalPage(params: {
       color: #6b7280;
       font-size: 13px;
     }
+    .duration-box {
+      margin-top: 16px;
+      margin-bottom: 14px;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid #c7d2fe;
+      background: #eef2ff;
+    }
+    .duration-title {
+      margin-bottom: 10px;
+      color: #1e3a8a;
+      font-weight: 700;
+    }
+    .duration-option {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .duration-option input[type="number"] {
+      width: 90px;
+      padding: 6px 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+    .duration-preview {
+      margin-top: 8px;
+      padding: 9px 10px;
+      border-radius: 10px;
+      border: 1px solid #2563eb;
+      background: #eff6ff;
+      color: #1e3a8a;
+      font-weight: 700;
+    }
   </style>
 </head>
 <body>
@@ -192,17 +245,71 @@ function renderApprovalPage(params: {
         <div class="value">${appName}</div>
         <div class="label">Solicitante</div>
         <div class="value">${requesterName}</div>
-        <div class="label">Duracion</div>
-        <div class="value">${minutes === null ? "-" : `${minutes} minutos`}</div>
+        <div class="label">Duracion solicitada</div>
+        <div class="value">${minutes} minutos</div>
       </div>
 
       ${message ? `<div class="msg">${message}</div>` : ""}
 
       ${showApproveButton
-      ? `<form method="POST" action="${approveActionPath}">
+      ? `<form id="approveForm" method="POST" action="${approveActionPath}">
+        <div class="duration-box">
+          <div class="duration-title">Elegi cuanto tiempo queres aprobar</div>
+          <label class="duration-option">
+            <input type="radio" name="durationMode" value="minutes" checked />
+            <span>60 minutos</span>
+          </label>
+          <label class="duration-option">
+            <input type="radio" name="durationMode" value="days" />
+            <span>X dias</span>
+            <input id="daysInput" type="number" name="days" min="1" max="${MAX_DAYS_DURATION}" value="1" disabled />
+          </label>
+          <label class="duration-option">
+            <input type="radio" name="durationMode" value="permanent" />
+            <span>Desbloqueo permanente</span>
+          </label>
+          <input type="hidden" name="minutes" value="${minutes}" />
+          <div id="durationPreview" class="duration-preview">${escapeHtml(defaultDurationPreview)}</div>
+        </div>
         <button class="btn" type="submit">Aprobar desbloqueo</button>
       </form>
-      <div class="hint">Al aprobar, se habilitara el desbloqueo temporal.</div>`
+      <div class="hint">Si aprobas, se habilita el desbloqueo por el tiempo elegido y despues vuelve el bloqueo.</div>
+      <script>
+        (function () {
+          const modeInputs = Array.from(document.querySelectorAll('input[name="durationMode"]'));
+          const daysInput = document.getElementById('daysInput');
+          const preview = document.getElementById('durationPreview');
+          const requestedMinutes = ${minutes};
+
+          function safeDays() {
+            const parsed = Number.parseInt(daysInput.value || '1', 10);
+            if (!Number.isFinite(parsed)) return 1;
+            if (parsed < 1) return 1;
+            if (parsed > ${MAX_DAYS_DURATION}) return ${MAX_DAYS_DURATION};
+            return parsed;
+          }
+
+          function updatePreview() {
+            const selected = modeInputs.find((input) => input.checked);
+            const mode = selected ? selected.value : 'minutes';
+            daysInput.disabled = mode !== 'days';
+
+            if (mode === 'days') {
+              preview.textContent = 'Duracion seleccionada: ' + safeDays() + ' dia(s)';
+              return;
+            }
+            if (mode === 'permanent') {
+              preview.textContent = 'Duracion seleccionada: desbloqueo permanente';
+              return;
+            }
+            preview.textContent = 'Duracion seleccionada: ' + requestedMinutes + ' minutos';
+          }
+
+          modeInputs.forEach((input) => input.addEventListener('change', updatePreview));
+          daysInput.addEventListener('input', updatePreview);
+          updatePreview();
+        })();
+      </script>`
       : ""}
     </div>
   </div>
@@ -315,6 +422,99 @@ function isTokenExpired(tokenExpiresAt: string) {
     return true;
   }
   return expiresAt <= Date.now();
+}
+
+function parsePositiveInt(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const normalized = Math.trunc(value);
+    return normalized > 0 ? normalized : null;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim();
+    if (!normalized) return null;
+    const parsed = Number.parseInt(normalized, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }
+
+  return null;
+}
+
+async function readApprovalDurationInput(req: Request): Promise<ApprovalDurationInput> {
+  const contentType = req.headers.get("content-type")?.toLowerCase() ?? "";
+
+  if (contentType.includes("application/json")) {
+    const parsed = await req.json().catch(() => null);
+    if (parsed && typeof parsed === "object") {
+      return parsed as ApprovalDurationInput;
+    }
+    return {};
+  }
+
+  if (
+    contentType.includes("application/x-www-form-urlencoded") ||
+    contentType.includes("multipart/form-data")
+  ) {
+    const form = await req.formData().catch(() => null);
+    if (!form) return {};
+
+    return {
+      durationMode: form.get("durationMode"),
+      minutes: form.get("minutes"),
+      days: form.get("days"),
+    };
+  }
+
+  return {};
+}
+
+function resolveApprovalDuration(
+  input: ApprovalDurationInput,
+  requestedMinutes: unknown,
+  approvedAtIso: string,
+): ResolvedApprovalDuration {
+  const safeRequestedMinutes = parsePositiveInt(requestedMinutes) ?? DEFAULT_UNLOCK_MINUTES;
+  const modeRaw = typeof input.durationMode === "string"
+    ? input.durationMode.trim().toLowerCase()
+    : "";
+
+  if (modeRaw === "permanent") {
+    return {
+      mode: "permanent",
+      minutesForGrant: safeRequestedMinutes,
+      durationLabel: "desbloqueo permanente",
+      unlockUntil: PERMANENT_UNLOCK_UNTIL_ISO,
+    };
+  }
+
+  if (modeRaw === "days") {
+    const parsedDays = parsePositiveInt(input.days) ?? 1;
+    const days = Math.min(Math.max(parsedDays, 1), MAX_DAYS_DURATION);
+    const unlockUntil = new Date(
+      new Date(approvedAtIso).getTime() + days * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    const minutesForGrant = Math.min(days * 24 * 60, MAX_MINUTES_DURATION);
+
+    return {
+      mode: "days",
+      minutesForGrant,
+      durationLabel: `${days} dia(s)`,
+      unlockUntil,
+    };
+  }
+
+  const parsedMinutes = parsePositiveInt(input.minutes) ?? safeRequestedMinutes;
+  const minutes = Math.min(Math.max(parsedMinutes, 1), MAX_MINUTES_DURATION);
+  const unlockUntil = new Date(
+    new Date(approvedAtIso).getTime() + minutes * 60 * 1000,
+  ).toISOString();
+
+  return {
+    mode: "minutes",
+    minutesForGrant: minutes,
+    durationLabel: `${minutes} minutos`,
+    unlockUntil,
+  };
 }
 
 serve(async (req) => {
@@ -599,7 +799,7 @@ serve(async (req) => {
           appName: existingRequest.app_name,
           requesterName: existingRequest.requester_name,
           minutes: existingRequest.minutes,
-          message: "Si aprobas, la app quedara desbloqueada temporalmente.",
+          message: "Si aprobas, la app se desbloquea por el tiempo elegido y despues vuelve a bloquearse.",
           approveActionPath: approvePath,
           showApproveButton: true,
         }),
@@ -627,6 +827,7 @@ serve(async (req) => {
     });
   }
 
+  const durationInput = await readApprovalDurationInput(req);
   const approvedAtIso = new Date().toISOString();
 
   const { data: approvedRequest, error: approveUpdateError } = await supabase
@@ -692,12 +893,13 @@ serve(async (req) => {
     `[approvals] approved requestId=${approvedRequest.id} installationId=${approvedRequest.installation_id} packageName=${approvedRequest.package_name} approvedAt=${approvedAtIso}`,
   );
 
-  const minutes = Number.isFinite(approvedRequest.minutes) && approvedRequest.minutes > 0
-    ? approvedRequest.minutes
-    : 60;
-  const unlockUntil = new Date(
-    new Date(approvedAtIso).getTime() + minutes * 60 * 1000,
-  ).toISOString();
+  const resolvedDuration = resolveApprovalDuration(
+    durationInput,
+    approvedRequest.minutes,
+    approvedAtIso,
+  );
+  const minutes = resolvedDuration.minutesForGrant;
+  const unlockUntil = resolvedDuration.unlockUntil;
 
   const generatedGrantId = generateId("ugr");
   const grantBasePayload = {
@@ -805,7 +1007,7 @@ serve(async (req) => {
               appName: approvedRequest.app_name,
               requesterName: approvedRequest.requester_name,
               minutes: grantMinutes(existingGrantRecord),
-              message: `Desbloqueo activo hasta ${grantUnlockUntil(existingGrantRecord)}.`,
+              message: `Desbloqueo aprobado por ${resolvedDuration.durationLabel}. Activo hasta ${grantUnlockUntil(existingGrantRecord)}.`,
               showApproveButton: false,
             }),
           );
@@ -819,6 +1021,8 @@ serve(async (req) => {
             packageName: approvedRequest.package_name,
             appName: approvedRequest.app_name,
             minutes: grantMinutes(existingGrantRecord),
+            durationMode: resolvedDuration.mode,
+            durationLabel: resolvedDuration.durationLabel,
             approvedAt: grantApprovedAt(existingGrantRecord),
             unlockUntil: grantUnlockUntil(existingGrantRecord),
             grantId: grantId(existingGrantRecord),
@@ -878,7 +1082,7 @@ serve(async (req) => {
         appName: approvedRequest.app_name,
         requesterName: approvedRequest.requester_name,
         minutes: grantMinutes(createdGrant),
-        message: `Desbloqueo activo hasta ${grantUnlockUntil(createdGrant)}.`,
+        message: `Desbloqueo aprobado por ${resolvedDuration.durationLabel}. Activo hasta ${grantUnlockUntil(createdGrant)}.`,
         showApproveButton: false,
       }),
     );
@@ -892,6 +1096,8 @@ serve(async (req) => {
       packageName: approvedRequest.package_name,
       appName: approvedRequest.app_name,
       minutes: grantMinutes(createdGrant),
+      durationMode: resolvedDuration.mode,
+      durationLabel: resolvedDuration.durationLabel,
       approvedAt: grantApprovedAt(createdGrant),
       unlockUntil: grantUnlockUntil(createdGrant),
       grantId: grantId(createdGrant),

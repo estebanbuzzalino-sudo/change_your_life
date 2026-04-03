@@ -3,6 +3,7 @@ package com.example.change_your_life
 import android.app.Activity
 import android.content.Intent
 import android.content.SharedPreferences
+import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import android.widget.Button
@@ -41,7 +42,7 @@ class BlockActivity : Activity() {
     @Volatile
     private var isRequestInFlight: Boolean = false
     private lateinit var titleText: TextView
-    private lateinit var packageText: TextView
+    private lateinit var openReplacementsButton: Button
     private lateinit var requestUnlockButton: Button
     private lateinit var closeButton: Button
     private var currentAppName: String = "App"
@@ -52,10 +53,14 @@ class BlockActivity : Activity() {
         setContentView(R.layout.activity_block)
 
         titleText = findViewById(R.id.blockTitle)
-        packageText = findViewById(R.id.blockPackage)
+        openReplacementsButton = findViewById(R.id.openReplacementsButton)
         requestUnlockButton = findViewById(R.id.requestUnlockButton)
         closeButton = findViewById(R.id.closeButton)
         bindIntentData(intent)
+
+        openReplacementsButton.setOnClickListener {
+            openReplacementsExperience()
+        }
 
         requestUnlockButton.setOnClickListener {
             if (isRequestInFlight) {
@@ -185,10 +190,33 @@ class BlockActivity : Activity() {
         currentPackageName = intent?.getStringExtra("packageName") ?: ""
 
         titleText.text = "$currentAppName esta bloqueada"
-        packageText.text = "Package: $currentPackageName"
 
         visiblePackageName = currentPackageName
         lastVisibleAtMillis = System.currentTimeMillis()
+    }
+
+    private fun openReplacementsExperience() {
+        val replacementsIntent = Intent(Intent.ACTION_VIEW).apply {
+            data = Uri.parse("changeyourlife://unlock/replacements?source=block_activity")
+            setPackage(packageName)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+
+        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        }
+
+        runCatching {
+            startActivity(replacementsIntent)
+        }.onFailure {
+            if (launchIntent != null) {
+                startActivity(launchIntent)
+            } else {
+                navigateToHome()
+            }
+        }
+
+        finish()
     }
 
     private fun navigateToHome() {

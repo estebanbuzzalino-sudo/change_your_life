@@ -43,6 +43,10 @@
                     android:scheme="changeyourlife"
                     android:host="unlock"
                     android:pathPrefix="/approve" />
+                <data
+                    android:scheme="changeyourlife"
+                    android:host="unlock"
+                    android:pathPrefix="/replacements" />
             </intent-filter>
         </activity>
 

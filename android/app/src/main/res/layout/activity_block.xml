@@ -2,55 +2,72 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="24dp"
+    android:background="#FDEAEA"
     android:gravity="center"
-    android:background="#FDEAEA">
+    android:orientation="vertical"
+    android:padding="24dp">
 
     <TextView
         android:id="@+id/blockTitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginBottom="14dp"
         android:text="App bloqueada"
-        android:textSize="28sp"
-        android:textStyle="bold"
         android:textColor="#C62828"
-        android:layout_marginBottom="16dp" />
+        android:textSize="28sp"
+        android:textStyle="bold" />
 
     <TextView
-        android:id="@+id/blockPackage"
-        android:layout_width="wrap_content"
+        android:id="@+id/blockMessage"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Package:"
-        android:textSize="16sp"
-        android:layout_marginBottom="24dp" />
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Esta app está restringida."
-        android:textSize="18sp"
-        android:layout_marginBottom="12dp" />
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Usá este tiempo para leer, estudiar, hacer ejercicio o meditar."
-        android:textSize="16sp"
+        android:layout_marginBottom="10dp"
         android:gravity="center"
-        android:layout_marginBottom="32dp" />
+        android:text="Este momento puede servirte para cambiar de aire y hacer algo que te haga bien."
+        android:textColor="#263238"
+        android:textSize="18sp" />
+
+    <TextView
+        android:id="@+id/blockSubMessage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="26dp"
+        android:gravity="center"
+        android:text="Elegi una alternativa positiva para sostener el cambio."
+        android:textColor="#455A64"
+        android:textSize="15sp" />
+
+    <Button
+        android:id="@+id/openReplacementsButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:text="Ver alternativas"
+        android:textAllCaps="false" />
+
+    <TextView
+        android:id="@+id/replacementsHintText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="18dp"
+        android:gravity="center"
+        android:text="Encontra algo util para hacer ahora."
+        android:textColor="#546E7A"
+        android:textSize="13sp" />
 
     <Button
         android:id="@+id/requestUnlockButton"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginBottom="10dp"
         android:text="Solicitar desbloqueo"
-        android:layout_marginBottom="12dp" />
+        android:textAllCaps="false" />
 
     <Button
         android:id="@+id/closeButton"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Volver" />
+        android:text="Volver"
+        android:textAllCaps="false" />
 
 </LinearLayout>

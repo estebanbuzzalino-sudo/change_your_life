@@ -18,7 +18,7 @@
       color: #111827;
     }
     .wrap {
-      max-width: 720px;
+      max-width: 760px;
       margin: 32px auto;
       padding: 0 16px;
     }
@@ -31,28 +31,28 @@
     }
     h1 {
       margin: 0 0 12px;
-      font-size: 24px;
-      line-height: 1.2;
+      font-size: 34px;
+      line-height: 1.15;
     }
     .status {
       display: inline-block;
-      margin-bottom: 14px;
-      padding: 6px 10px;
+      margin-bottom: 16px;
+      padding: 6px 12px;
       border-radius: 999px;
-      font-weight: 600;
-      font-size: 13px;
+      font-weight: 700;
+      font-size: 14px;
       border: 1px solid #1d4ed8;
       color: #1d4ed8;
       background: #eff6ff;
     }
     .grid {
       display: grid;
-      grid-template-columns: 170px 1fr;
-      gap: 8px 10px;
-      margin: 12px 0 16px;
+      grid-template-columns: 180px 1fr;
+      gap: 8px 12px;
+      margin: 14px 0 16px;
     }
     .label {
-      font-weight: 600;
+      font-weight: 700;
       color: #4b5563;
     }
     .value {
@@ -60,8 +60,43 @@
       word-break: break-word;
     }
     .msg {
-      margin: 12px 0 16px;
+      margin: 14px 0 14px;
       color: #374151;
+      line-height: 1.5;
+    }
+    .duration-card {
+      border: 1px solid #dbeafe;
+      background: #f8fbff;
+      border-radius: 12px;
+      padding: 12px;
+      margin: 12px 0 14px;
+      display: none;
+    }
+    .duration-title {
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    .duration-option {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .duration-option input[type="number"] {
+      width: 90px;
+      padding: 6px 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+    .preview {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid #2563eb;
+      background: #eff6ff;
+      color: #1e3a8a;
+      font-weight: 700;
     }
     .button {
       appearance: none;
@@ -70,7 +105,7 @@
       background: #2563eb;
       color: #fff;
       padding: 12px 16px;
-      font-size: 15px;
+      font-size: 16px;
       font-weight: 700;
       cursor: pointer;
     }
@@ -82,6 +117,7 @@
       margin-top: 12px;
       color: #6b7280;
       font-size: 13px;
+      line-height: 1.4;
     }
     .error {
       color: #991b1b;
@@ -104,11 +140,33 @@
         <div class="label">Solicitante</div>
         <div id="requesterName" class="value">-</div>
 
-        <div class="label">Duración</div>
-        <div id="minutes" class="value">-</div>
+        <div class="label">Duracion solicitada</div>
+        <div id="requestedDuration" class="value">-</div>
       </div>
 
       <div id="message" class="msg">Validando solicitud...</div>
+
+      <div id="durationCard" class="duration-card">
+        <div class="duration-title">Elegi cuanto tiempo queres aprobar</div>
+
+        <label class="duration-option">
+          <input type="radio" name="durationMode" value="minutes" checked />
+          <span>60 minutos</span>
+        </label>
+
+        <label class="duration-option">
+          <input type="radio" name="durationMode" value="days" />
+          <span>X dias</span>
+          <input id="daysInput" type="number" min="1" max="30" value="1" disabled />
+        </label>
+
+        <label class="duration-option">
+          <input type="radio" name="durationMode" value="permanent" />
+          <span>Desbloqueo permanente</span>
+        </label>
+
+        <div id="durationPreview" class="preview">Aprobacion seleccionada: 60 minutos</div>
+      </div>
 
       <button id="approveBtn" class="button" style="display:none;">Aprobar desbloqueo</button>
       <div id="hint" class="hint"></div>
@@ -119,14 +177,20 @@
     const statusChip = document.getElementById("statusChip");
     const appNameEl = document.getElementById("appName");
     const requesterNameEl = document.getElementById("requesterName");
-    const minutesEl = document.getElementById("minutes");
+    const requestedDurationEl = document.getElementById("requestedDuration");
     const messageEl = document.getElementById("message");
     const approveBtn = document.getElementById("approveBtn");
     const hintEl = document.getElementById("hint");
+    const durationCard = document.getElementById("durationCard");
+    const durationPreviewEl = document.getElementById("durationPreview");
+    const daysInput = document.getElementById("daysInput");
+    const durationModeInputs = Array.from(document.querySelectorAll('input[name="durationMode"]'));
 
     const params = new URLSearchParams(window.location.search);
     const token = (params.get("token") || "").trim();
     const apiBase = (params.get("apiBase") || "https://oggqvcjtvfgyagaisvmj.functions.supabase.co").replace(/\/+$/, "");
+
+    let requestedMinutes = 60;
 
     function setStatus(text, tone) {
       statusChip.textContent = text;
@@ -138,7 +202,57 @@
     function setInfo(appName, requesterName, minutes) {
       appNameEl.textContent = appName || "-";
       requesterNameEl.textContent = requesterName || "-";
-      minutesEl.textContent = Number.isFinite(minutes) ? `${minutes} minutos` : "-";
+      requestedDurationEl.textContent = Number.isFinite(minutes) ? `${minutes} minutos` : "-";
+    }
+
+    function getSelectedDurationMode() {
+      const selected = durationModeInputs.find((input) => input.checked);
+      return selected ? selected.value : "minutes";
+    }
+
+    function getSafeDays() {
+      const parsed = Number.parseInt(daysInput.value || "1", 10);
+      if (!Number.isFinite(parsed)) return 1;
+      if (parsed < 1) return 1;
+      if (parsed > 30) return 30;
+      return parsed;
+    }
+
+    function getDurationPayload() {
+      const mode = getSelectedDurationMode();
+      if (mode === "days") {
+        return {
+          durationMode: "days",
+          days: getSafeDays(),
+        };
+      }
+      if (mode === "permanent") {
+        return {
+          durationMode: "permanent",
+        };
+      }
+      return {
+        durationMode: "minutes",
+        minutes: requestedMinutes > 0 ? requestedMinutes : 60,
+      };
+    }
+
+    function updateDurationPreview() {
+      const mode = getSelectedDurationMode();
+      daysInput.disabled = mode !== "days";
+
+      if (mode === "days") {
+        const days = getSafeDays();
+        durationPreviewEl.textContent = `Aprobacion seleccionada: ${days} dia(s)`;
+        return;
+      }
+      if (mode === "permanent") {
+        durationPreviewEl.textContent = "Aprobacion seleccionada: desbloqueo permanente";
+        return;
+      }
+
+      const minutes = requestedMinutes > 0 ? requestedMinutes : 60;
+      durationPreviewEl.textContent = `Aprobacion seleccionada: ${minutes} minutos`;
     }
 
     function showError(message) {
@@ -146,7 +260,8 @@
       messageEl.textContent = message;
       messageEl.className = "msg error";
       approveBtn.style.display = "none";
-      hintEl.textContent = "Revisá el link o pedí una nueva solicitud.";
+      durationCard.style.display = "none";
+      hintEl.textContent = "Revisa el link o pedi una nueva solicitud.";
     }
 
     async function fetchJson(url, options) {
@@ -177,12 +292,17 @@
       }
 
       const data = body.data || {};
-      setInfo(data.appName, data.requesterName, Number(data.minutes));
+      requestedMinutes = Number.isFinite(Number(data.minutes)) && Number(data.minutes) > 0
+        ? Number(data.minutes)
+        : 60;
+      setInfo(data.appName, data.requesterName, requestedMinutes);
+      updateDurationPreview();
 
       if (data.status === "pending_approval") {
-        setStatus("Pendiente de aprobación", "pending");
-        messageEl.textContent = "Si aprobás, se habilita el desbloqueo temporal.";
+        setStatus("Pendiente de aprobacion", "pending");
+        messageEl.textContent = "Si aprobas, la app se desbloquea por el tiempo elegido y luego vuelve a bloquearse automaticamente.";
         messageEl.className = "msg";
+        durationCard.style.display = "block";
         approveBtn.style.display = "inline-block";
         hintEl.textContent = "Este enlace es de un solo uso.";
         return;
@@ -193,29 +313,42 @@
         messageEl.textContent = "Esta solicitud ya fue aprobada.";
         messageEl.className = "msg ok";
         approveBtn.style.display = "none";
+        durationCard.style.display = "none";
         hintEl.textContent = "";
         return;
       }
 
-      showError(`La solicitud está en estado '${data.status || "desconocido"}'.`);
+      showError(`La solicitud esta en estado '${data.status || "desconocido"}'.`);
     }
+
+    durationModeInputs.forEach((input) => {
+      input.addEventListener("change", updateDurationPreview);
+    });
+    daysInput.addEventListener("input", updateDurationPreview);
 
     approveBtn.addEventListener("click", async () => {
       approveBtn.disabled = true;
       approveBtn.textContent = "Aprobando...";
 
       const url = `${apiBase}/approvals/${encodeURIComponent(token)}/approve`;
+      const payload = getDurationPayload();
       const { response, body } = await fetchJson(url, {
         method: "POST",
-        headers: { "Accept": "application/json" }
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload),
       });
 
       if (response.ok && body.ok) {
         const data = body.data || {};
         setStatus("Aprobado", "ok");
-        messageEl.textContent = `Desbloqueo activo hasta ${data.unlockUntil || "-"}.`;
+        const durationLabel = data.durationLabel || durationPreviewEl.textContent.replace("Aprobacion seleccionada: ", "");
+        messageEl.textContent = `Desbloqueo aprobado por ${durationLabel}. Activo hasta ${data.unlockUntil || "-"}.`;
         messageEl.className = "msg ok";
         approveBtn.style.display = "none";
+        durationCard.style.display = "none";
         hintEl.textContent = "";
         return;
       }

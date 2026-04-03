@@ -65,6 +65,18 @@ class _ReplacementOption {
   });
 }
 
+class _ReplacementSuggestion {
+  final String title;
+  final String action;
+  final IconData icon;
+
+  const _ReplacementSuggestion({
+    required this.title,
+    required this.action,
+    required this.icon,
+  });
+}
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -133,6 +145,97 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       icon: Icons.psychology_alt_rounded,
     ),
   ];
+  static const Map<String, List<_ReplacementSuggestion>>
+      _replacementSuggestionsByOptionId = {
+    'reading_learning': [
+      _ReplacementSuggestion(
+        title: 'Lectura de 10 minutos',
+        action: 'Elegi un articulo o capitulo corto y marca un objetivo simple.',
+        icon: Icons.chrome_reader_mode_rounded,
+      ),
+      _ReplacementSuggestion(
+        title: 'Podcast educativo',
+        action: 'Escucha un episodio breve mientras caminas o te preparas algo.',
+        icon: Icons.podcasts_rounded,
+      ),
+      _ReplacementSuggestion(
+        title: 'Curso rapido',
+        action: 'Avanza una leccion de algun curso que ya tengas guardado.',
+        icon: Icons.school_rounded,
+      ),
+      _ReplacementSuggestion(
+        title: 'Idioma en micro sesiones',
+        action: 'Practica 15 minutos de vocabulario o escucha activa.',
+        icon: Icons.translate_rounded,
+      ),
+    ],
+    'wellbeing_training': [
+      _ReplacementSuggestion(
+        title: 'Respiracion guiada',
+        action: 'Haz 3 minutos de respiracion profunda para bajar ansiedad.',
+        icon: Icons.air_rounded,
+      ),
+      _ReplacementSuggestion(
+        title: 'Estiramiento breve',
+        action: 'Mueve cuello, hombros y espalda durante 5 a 10 minutos.',
+        icon: Icons.accessibility_new_rounded,
+      ),
+      _ReplacementSuggestion(
+        title: 'Caminata corta',
+        action: 'Sal a caminar 15 minutos para cambiar de foco mental.',
+        icon: Icons.directions_walk_rounded,
+      ),
+      _ReplacementSuggestion(
+        title: 'Mini rutina',
+        action: 'Completa una rutina de cuerpo completo de 12 minutos.',
+        icon: Icons.fitness_center_rounded,
+      ),
+    ],
+    'music_creativity': [
+      _ReplacementSuggestion(
+        title: 'Playlist enfocada',
+        action: 'Escucha musica instrumental para trabajar o relajarte.',
+        icon: Icons.queue_music_rounded,
+      ),
+      _ReplacementSuggestion(
+        title: 'Escritura libre',
+        action: 'Anota ideas, pendientes o un diario rapido de 10 minutos.',
+        icon: Icons.edit_note_rounded,
+      ),
+      _ReplacementSuggestion(
+        title: 'Dibujo o boceto',
+        action: 'Haz un boceto simple para activar creatividad sin presion.',
+        icon: Icons.brush_rounded,
+      ),
+      _ReplacementSuggestion(
+        title: 'Practica musical',
+        action: 'Si tocas un instrumento, practica una cancion corta.',
+        icon: Icons.piano_rounded,
+      ),
+    ],
+    'focus_games': [
+      _ReplacementSuggestion(
+        title: 'Sudoku o logica',
+        action: 'Resuelve un desafio de logica para entrenar concentracion.',
+        icon: Icons.grid_view_rounded,
+      ),
+      _ReplacementSuggestion(
+        title: 'Ajedrez tactico',
+        action: 'Juega una partida corta o un problema tactico.',
+        icon: Icons.extension_rounded,
+      ),
+      _ReplacementSuggestion(
+        title: 'Memoria activa',
+        action: 'Usa ejercicios de memoria durante 10 minutos.',
+        icon: Icons.psychology_rounded,
+      ),
+      _ReplacementSuggestion(
+        title: 'Desafio de foco',
+        action: 'Configura 25 minutos de foco total en una tarea concreta.',
+        icon: Icons.timer_rounded,
+      ),
+    ],
+  };
 
   String selectedDurationType = _durationDays;
   double selectedValue = 7;
@@ -294,11 +397,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _handleIncomingDeepLink(Uri uri) async {
-    if (!_isApprovalDeepLink(uri)) return;
+    if (!_isApprovalDeepLink(uri) && !_isReplacementsDeepLink(uri)) return;
 
     final rawUri = uri.toString();
     if (_lastHandledDeepLink == rawUri) return;
     _lastHandledDeepLink = rawUri;
+
+    if (_isReplacementsDeepLink(uri)) {
+      await _openReplacementsFromDeepLink();
+      return;
+    }
 
     await _applyDeepLinkApproval(uri);
   }
@@ -308,6 +416,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return uri.scheme == 'changeyourlife' &&
         uri.host == 'unlock' &&
         normalizedPath == '/approve';
+  }
+
+  bool _isReplacementsDeepLink(Uri uri) {
+    final normalizedPath = uri.path.startsWith('/') ? uri.path : '/${uri.path}';
+    return uri.scheme == 'changeyourlife' &&
+        uri.host == 'unlock' &&
+        normalizedPath == '/replacements';
+  }
+
+  Future<void> _openReplacementsFromDeepLink() async {
+    await _jumpToWizardStep(2);
+    if (!mounted) return;
+    _showMessage('Te llevamos a alternativas utiles para este momento.');
   }
 
   Future<void> _applyDeepLinkApproval(Uri uri) async {
@@ -665,6 +786,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return true;
   }
 
+  Future<void> _jumpToWizardStep(int targetIndex) async {
+    if (targetIndex < 0 || targetIndex > 3) return;
+
+    if (!mounted) return;
+    if (_wizardPageController.hasClients) {
+      await _wizardPageController.animateToPage(
+        targetIndex,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+      );
+      return;
+    }
+
+    setState(() {
+      _currentWizardIndex = targetIndex;
+    });
+  }
+
   Future<void> _goToWizardStep(int targetIndex) async {
     if (targetIndex < 0 || targetIndex > 3) return;
     if (targetIndex == _currentWizardIndex) return;
@@ -678,11 +817,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
     }
 
-    await _wizardPageController.animateToPage(
-      targetIndex,
-      duration: const Duration(milliseconds: 280),
-      curve: Curves.easeOutCubic,
-    );
+    await _jumpToWizardStep(targetIndex);
   }
 
   Future<void> _goNextWizardStep() async {
@@ -773,6 +908,57 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
 
     await _saveReplacementChoices();
+  }
+
+  void _showReplacementIdeas(_ReplacementOption option) {
+    final ideas = _replacementSuggestionsByOptionId[option.id] ?? const [];
+    if (ideas.isEmpty) return;
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 8, 18, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  option.title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Opciones concretas para reemplazar redes en este momento:',
+                  style: TextStyle(color: Colors.black54),
+                ),
+                const SizedBox(height: 10),
+                ...ideas.map(
+                  (idea) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Card(
+                      margin: EdgeInsets.zero,
+                      child: ListTile(
+                        dense: true,
+                        leading: Icon(idea.icon),
+                        title: Text(idea.title),
+                        subtitle: Text(idea.action),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _saveData() async {
@@ -1443,12 +1629,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               final isSelected = _selectedReplacementIds.contains(option.id);
               return Padding(
                 padding: const EdgeInsets.only(bottom: 10),
-                child: SelectableOptionCard(
-                  title: option.title,
-                  subtitle: option.subtitle,
-                  icon: option.icon,
-                  selected: isSelected,
-                  onTap: () => _toggleReplacementOption(option.id),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SelectableOptionCard(
+                      title: option.title,
+                      subtitle: option.subtitle,
+                      icon: option.icon,
+                      selected: isSelected,
+                      onTap: () => _toggleReplacementOption(option.id),
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: () => _showReplacementIdeas(option),
+                        icon: const Icon(Icons.tips_and_updates_outlined),
+                        label: const Text('Ver ideas concretas'),
+                      ),
+                    ),
+                  ],
                 ),
               );
             }),
