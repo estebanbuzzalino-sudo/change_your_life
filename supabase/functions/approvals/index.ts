@@ -115,11 +115,7 @@ function renderApprovalPage(params: {
   const color = statusColor(params.statusKind);
   const appName = params.appName ? escapeHtml(params.appName) : "-";
   const requesterName = params.requesterName ? escapeHtml(params.requesterName) : "-";
-  const minutes = typeof params.minutes === "number" && params.minutes > 0 ? params.minutes : DEFAULT_UNLOCK_MINUTES;
   const message = params.message ? escapeHtml(params.message) : "";
-  const durationRequestedLabel = params.durationRequestedLabel
-    ? escapeHtml(params.durationRequestedLabel)
-    : `${minutes} minutos`;
   const approveActionPath = params.approveActionPath
     ? escapeHtml(params.approveActionPath)
     : "";
@@ -256,8 +252,6 @@ function renderApprovalPage(params: {
         <div class="value">${appName}</div>
         <div class="label">Solicitante</div>
         <div class="value">${requesterName}</div>
-        <div class="label">Duracion solicitada</div>
-        <div class="value">${durationRequestedLabel}</div>
       </div>
 
       ${message ? `<div class="msg">${message}</div>` : ""}

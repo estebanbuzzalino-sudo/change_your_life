@@ -22,6 +22,7 @@ class AppBlockAccessibilityService : AccessibilityService() {
     private val launchAfterHomeDelayMillis = 120L
     private var transitionGuardPackage: String? = null
     private var transitionGuardUntil: Long = 0L
+    private var lastForegroundPackage: String? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private val prefsFileName = "FlutterSharedPreferences"
     private val blockedPackagesKey = "flutter.blocked_packages_csv"
@@ -115,6 +116,7 @@ class AppBlockAccessibilityService : AccessibilityService() {
         }
 
         val openedPackage = event.packageName?.toString() ?: return
+        lastForegroundPackage = openedPackage
 
         if (isCriticalPackage(openedPackage)) {
             return
@@ -191,6 +193,15 @@ class AppBlockAccessibilityService : AccessibilityService() {
                 }
 
                 if (isTemporarilyUnlocked(openedPackage, currentNow)) {
+                    return@postDelayed
+                }
+
+                val latestForeground = lastForegroundPackage
+                if (!latestForeground.isNullOrBlank() &&
+                    latestForeground != openedPackage &&
+                    !launcherPackages.contains(latestForeground) &&
+                    !criticalPackages.contains(latestForeground)
+                ) {
                     return@postDelayed
                 }
 

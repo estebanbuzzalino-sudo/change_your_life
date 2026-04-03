@@ -33,6 +33,24 @@ async function sha256(value: string) {
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+function formatEmailRequestedAt(isoDate: string) {
+  const date = new Date(isoDate);
+  if (Number.isNaN(date.getTime())) return isoDate;
+
+  const formatter = new Intl.DateTimeFormat("es-AR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    timeZone: "America/Argentina/Buenos_Aires",
+  });
+
+  return `${formatter.format(date)} (GMT-3)`;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -73,7 +91,9 @@ serve(async (req) => {
 
     const packageName = body.packageName;
     const appName = body.appName;
-    const requesterName = body.requesterName ?? "Usuario actual";
+    const requesterName = typeof body.requesterName === "string" && body.requesterName.trim().length > 0
+      ? body.requesterName.trim()
+      : "Usuario";
     const friendName = body.friendName ?? "";
     const friendEmail = body.friendEmail;
     const minutes = body.minutes ?? 60;
@@ -153,24 +173,22 @@ serve(async (req) => {
       approvalLink = approvalWebUrl.toString();
     }
 
+    const requestedAtLabel = formatEmailRequestedAt(requestedAt.toISOString());
+
     const emailHtml = `
       <h2>Solicitud de desbloqueo temporal</h2>
       <p>Hola ${friendName || "responsable"},</p>
-      <p>Se solicita tu aprobación para desbloquear temporalmente una app por ${minutes} minutos.</p>
+      <p>Se solicita tu aprobacion para desbloquear temporalmente una app por ${minutes} minutos.</p>
       <p><strong>App bloqueada:</strong> ${appName}</p>
-      <p><strong>Package:</strong> ${packageName}</p>
       <p><strong>Solicitante:</strong> ${requesterName}</p>
-      <p><strong>Fecha/Hora:</strong> ${requestedAt.toISOString()}</p>
+      <p><strong>Fecha y hora:</strong> ${requestedAtLabel}</p>
       <p>
         <a href="${approvalLink}" style="display:inline-block;padding:12px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:8px;">
           Aprobar desbloqueo
         </a>
       </p>
-      <p>Si el botón no funciona, copiá este link:</p>
+      <p>Si el boton no funciona, copia este link:</p>
       <p>${approvalLink}</p>
-      <p style="font-size:12px;color:#6b7280;">
-        Fallback API: ${approvalApiUrl.toString()}
-      </p>
     `;
 
     const resendResponse = await fetch("https://api.resend.com/emails", {

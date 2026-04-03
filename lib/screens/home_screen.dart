@@ -72,6 +72,7 @@ class _ReplacementSuggestion {
   final IconData icon;
   final String playStorePackageId;
   final String playStoreQuery;
+  final bool featured;
 
   const _ReplacementSuggestion({
     required this.title,
@@ -79,6 +80,7 @@ class _ReplacementSuggestion {
     required this.icon,
     required this.playStorePackageId,
     required this.playStoreQuery,
+    this.featured = false,
   });
 }
 
@@ -96,6 +98,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   static const String _pendingRequestsKey = 'pending_unlock_requests_csv';
   static const String _approvedRequestIdsKey = 'approved_unlock_request_ids_csv';
   static const String _replacementChoicesKey = 'replacement_choices';
+  static const String _requesterNameKey = 'requester_name';
   static const int _defaultDeepLinkUnlockMinutes = 60;
   static const List<_PopularBlockAppOption> _popularBlockApps = [
     _PopularBlockAppOption(
@@ -159,6 +162,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         icon: Icons.chrome_reader_mode_rounded,
         playStorePackageId: 'com.google.android.apps.books',
         playStoreQuery: 'Google Play Books',
+        featured: true,
       ),
       _ReplacementSuggestion(
         title: 'Podcast educativo',
@@ -166,6 +170,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         icon: Icons.podcasts_rounded,
         playStorePackageId: 'com.spotify.music',
         playStoreQuery: 'Spotify podcast',
+        featured: true,
       ),
       _ReplacementSuggestion(
         title: 'Curso rapido',
@@ -188,6 +193,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         action: 'Haz 3 minutos de respiracion profunda para bajar ansiedad.',
         icon: Icons.air_rounded,
         playStorePackageId: 'com.calm.android',
+        featured: true,
         playStoreQuery: 'Calm meditación',
       ),
       _ReplacementSuggestion(
@@ -209,6 +215,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         action: 'Completa una rutina de cuerpo completo de 12 minutos.',
         icon: Icons.fitness_center_rounded,
         playStorePackageId: 'homeworkout.homeworkouts.noequipment',
+        featured: true,
         playStoreQuery: 'home workout',
       ),
     ],
@@ -218,6 +225,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         action: 'Escucha musica instrumental para trabajar o relajarte.',
         icon: Icons.queue_music_rounded,
         playStorePackageId: 'com.spotify.music',
+        featured: true,
         playStoreQuery: 'Spotify',
       ),
       _ReplacementSuggestion(
@@ -248,6 +256,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         action: 'Resuelve un desafio de logica para entrenar concentracion.',
         icon: Icons.grid_view_rounded,
         playStorePackageId: 'easy.sudoku.puzzle.solver.free',
+        featured: true,
         playStoreQuery: 'sudoku',
       ),
       _ReplacementSuggestion(
@@ -334,9 +343,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _loadSavedData() async {
     final prefs = await SharedPreferences.getInstance();
-    if (kDebugMode) {
-      await _clearPersistedAppState(prefs);
-    }
     final savedBlocks = prefs.getStringList('activeBlocks') ?? [];
     final savedApps = prefs.getStringList('selectedApps') ?? [];
 
@@ -988,6 +994,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void _showReplacementIdeas(_ReplacementOption option) {
     final ideas = _replacementSuggestionsByOptionId[option.id] ?? const [];
     if (ideas.isEmpty) return;
+    final sortedIdeas = [...ideas]
+      ..sort((a, b) {
+        if (a.featured == b.featured) return 0;
+        return a.featured ? -1 : 1;
+      });
 
     showModalBottomSheet<void>(
       context: context,
@@ -995,67 +1006,116 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       showDragHandle: true,
       builder: (sheetContext) {
         return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 8, 18, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  option.title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(sheetContext).size.height * 0.8,
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(18, 8, 18, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    option.title,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Opciones concretas para reemplazar redes en este momento:',
-                  style: TextStyle(color: Colors.black54),
-                ),
-                const SizedBox(height: 10),
-                ...ideas.map(
-                  (idea) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Card(
-                      margin: EdgeInsets.zero,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Toca una opcion para abrirla en Play Store y usarla ahora.',
+                    style: TextStyle(color: Colors.black54),
+                  ),
+                  const SizedBox(height: 10),
+                  ...sortedIdeas.map(
+                    (idea) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: () => _openReplacementInStore(idea),
+                          child: Ink(
+                            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: const Color(0xFFD5D8E0)),
+                              color: Colors.white,
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(idea.icon, size: 20),
-                                const SizedBox(width: 8),
+                                Container(
+                                  width: 42,
+                                  height: 42,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFEFF3FF),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Icon(idea.icon, color: const Color(0xFF3558D6)),
+                                ),
+                                const SizedBox(width: 12),
                                 Expanded(
-                                  child: Text(
-                                    idea.title,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                    ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              idea.title,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ),
+                                          if (idea.featured)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 8,
+                                                vertical: 3,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFE7F2E8),
+                                                borderRadius: BorderRadius.circular(999),
+                                              ),
+                                              child: const Text(
+                                                'Recomendada',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: Color(0xFF1E7B3A),
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        idea.action,
+                                        style: const TextStyle(color: Colors.black87),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      const Text(
+                                        'Abrir en Play Store',
+                                        style: TextStyle(
+                                          color: Color(0xFF3558D6),
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 6),
-                            Text(idea.action),
-                            const SizedBox(height: 6),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: TextButton.icon(
-                                onPressed: () => _openReplacementInStore(idea),
-                                icon: const Icon(Icons.open_in_new_rounded),
-                                label: const Text('Abrir en Play Store'),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );
@@ -1258,6 +1318,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final remainingMillis = info.unlockedUntilMillis - now;
     if (remainingMillis <= 0) return 0;
     return (remainingMillis / Duration.millisecondsPerMinute).ceil();
+  }
+
+  bool _isPermanentUnlock(_TemporaryUnlockInfo info) {
+    final permanentThreshold = DateTime.utc(2099, 1, 1).millisecondsSinceEpoch;
+    return info.unlockedUntilMillis >= permanentThreshold;
+  }
+
+  String _temporaryUnlockLabel(_TemporaryUnlockInfo info) {
+    if (_isPermanentUnlock(info)) {
+      return 'Permanente';
+    }
+    final remaining = _remainingMinutes(info);
+    if (remaining <= 0) {
+      return 'Expirado';
+    }
+    final until = DateTime.fromMillisecondsSinceEpoch(info.unlockedUntilMillis);
+    return _remainingTimeFrom(until);
   }
 
   String get durationText {
@@ -1734,25 +1811,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               final isSelected = _selectedReplacementIds.contains(option.id);
               return Padding(
                 padding: const EdgeInsets.only(bottom: 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SelectableOptionCard(
-                      title: option.title,
-                      subtitle: option.subtitle,
-                      icon: option.icon,
-                      selected: isSelected,
-                      onTap: () => _toggleReplacementOption(option.id),
-                    ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton.icon(
-                        onPressed: () => _showReplacementIdeas(option),
-                        icon: const Icon(Icons.tips_and_updates_outlined),
-                        label: const Text('Ver apps sugeridas'),
-                      ),
-                    ),
-                  ],
+                child: SelectableOptionCard(
+                  title: option.title,
+                  subtitle: '${option.subtitle} Toca para ver apps sugeridas.',
+                  icon: option.icon,
+                  selected: isSelected,
+                  onTap: () {
+                    _toggleReplacementOption(option.id);
+                    _showReplacementIdeas(option);
+                  },
                 ),
               );
             }),
@@ -1865,18 +1932,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         ),
                       ],
                     ),
-                  ],
-                ),
-              ),
-            ),
-            if (selectedActiveBlocks.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                    if (selectedActiveBlocks.isNotEmpty) ...[
+                      const Divider(height: 22),
                       const Text(
                         'Tiempo por app bloqueada',
                         style: TextStyle(fontWeight: FontWeight.w700),
@@ -1902,10 +1959,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         );
                       }),
                     ],
-                  ),
+                  ],
                 ),
               ),
-            ],
+            ),
             const SizedBox(height: 10),
             Card(
               child: Padding(
@@ -1954,12 +2011,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Gestion de desbloqueos',
+                      'Solicitudes y desbloqueos temporales',
                       style: TextStyle(fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 6),
                     const Text(
-                      'Solicitudes pendientes: pedidos de desbloqueo que todavia debe aprobar tu amigo responsable.',
+                      'Aqui ves lo que tu amigo aun debe aprobar y cualquier desbloqueo temporal ya activo.',
                       style: TextStyle(color: Colors.black54),
                     ),
                     const SizedBox(height: 10),
@@ -2003,7 +2060,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       const Text('No hay desbloqueos temporales activos.')
                     else
                       ...temporaryUnlockedApps.map((item) {
-                        final remaining = _remainingMinutes(item);
+                        final remainingLabel = _temporaryUnlockLabel(item);
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 6),
                           child: Row(
@@ -2014,7 +2071,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 child: Text(_displayNameForPackage(item.packageName)),
                               ),
                               Text(
-                                '$remaining min',
+                                remainingLabel,
                                 style: const TextStyle(fontWeight: FontWeight.w600),
                               ),
                             ],
@@ -2024,11 +2081,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ],
                 ),
               ),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton(
-              onPressed: _clearAllData,
-              child: const Text('Borrar datos guardados'),
             ),
           ],
         ),
@@ -2183,7 +2235,4 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 }
-
-
-
 

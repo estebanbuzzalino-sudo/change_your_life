@@ -36,6 +36,7 @@ class BlockActivity : Activity() {
     private val requesterNameKey = "flutter.requester_name"
     private val installationIdKey = "flutter.installation_id"
     private val defaultUnlockMinutes = 60
+    private val defaultRequesterName = "Usuario"
     private val unlockRequestsEndpoint =
         "https://oggqvcjtvfgyagaisvmj.functions.supabase.co/unlock-requests"
 
@@ -273,7 +274,7 @@ class BlockActivity : Activity() {
 
         val safeAppName = appName.ifBlank { if (packageName.isBlank()) "App" else packageName }
         val safeFriendName = friendName.ifBlank { "amigo responsable" }
-        val safeRequesterName = requesterName.ifBlank { "Usuario actual" }
+        val safeRequesterName = requesterName.ifBlank { defaultRequesterName }
         val installationId = getOrCreateInstallationId(prefs)
         Log.i(
             tag,
