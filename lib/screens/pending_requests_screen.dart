@@ -20,8 +20,6 @@ class PendingRequestsScreen extends StatefulWidget {
 
 class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
   static const String _pendingRequestsKey = 'pending_unlock_requests_csv';
-  static const String _temporaryUnlockedKey = 'temporary_unlocked_packages_csv';
-  static const Duration _temporaryUnlockDuration = Duration(minutes: 60);
 
   bool isLoading = true;
   List<PendingUnlockRequest> pendingRequests = [];
@@ -55,37 +53,6 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
       pendingRequests = requests;
       isLoading = false;
     });
-  }
-
-  Future<void> _approveRequest(PendingUnlockRequest request) async {
-    final prefs = await SharedPreferences.getInstance();
-
-    final pendingMap = _parsePendingRequests(
-      prefs.getString(_pendingRequestsKey) ?? '',
-    );
-    pendingMap.remove(request.packageName);
-    await prefs.setString(_pendingRequestsKey, _serializePendingRequests(pendingMap));
-
-    final temporaryMap = _parseTemporaryUnlocked(
-      prefs.getString(_temporaryUnlockedKey) ?? '',
-    );
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final unlockUntil = now + _temporaryUnlockDuration.inMilliseconds;
-    temporaryMap[request.packageName] = unlockUntil;
-    await prefs.setString(
-      _temporaryUnlockedKey,
-      _serializeTemporaryUnlocked(temporaryMap),
-    );
-
-    if (!mounted) return;
-
-    setState(() {
-      pendingRequests.removeWhere((item) => item.packageName == request.packageName);
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Solicitud aprobada por 60 minutos.')),
-    );
   }
 
   Map<String, int?> _parsePendingRequests(String csv) {
@@ -130,40 +97,6 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
     );
   }
 
-  String _serializePendingRequests(Map<String, int?> requests) {
-    return requests.entries.map((entry) {
-      final ts = entry.value;
-      if (ts == null) return entry.key;
-      return '${entry.key}|$ts';
-    }).join(',');
-  }
-
-  Map<String, int> _parseTemporaryUnlocked(String csv) {
-    final unlocked = <String, int>{};
-    if (csv.trim().isEmpty) return unlocked;
-
-    for (final raw in csv.split(',')) {
-      final entry = raw.trim();
-      if (entry.isEmpty || !entry.contains('|')) continue;
-
-      final separatorIndex = entry.indexOf('|');
-      final packageName = entry.substring(0, separatorIndex).trim();
-      final until = int.tryParse(entry.substring(separatorIndex + 1).trim());
-      if (packageName.isEmpty || until == null) continue;
-
-      final existing = unlocked[packageName];
-      if (existing == null || until > existing) {
-        unlocked[packageName] = until;
-      }
-    }
-
-    return unlocked;
-  }
-
-  String _serializeTemporaryUnlocked(Map<String, int> unlocked) {
-    return unlocked.entries.map((entry) => '${entry.key}|${entry.value}').join(',');
-  }
-
   String _formatRequestedAt(int? millis) {
     if (millis == null) return 'Sin fecha';
     final dt = DateTime.fromMillisecondsSinceEpoch(millis);
@@ -202,9 +135,8 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                         subtitle: Text(
                           'Solicitada: ${_formatRequestedAt(request.requestedAtMillis)}',
                         ),
-                        trailing: ElevatedButton(
-                          onPressed: () => _approveRequest(request),
-                          child: const Text('Aprobar'),
+                        trailing: const Chip(
+                          label: Text('Pendiente'),
                         ),
                       ),
                     );

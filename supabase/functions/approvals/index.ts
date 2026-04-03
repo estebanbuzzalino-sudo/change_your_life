@@ -506,6 +506,10 @@ serve(async (req) => {
     );
   }
 
+  console.log(
+    `[approvals] requestResolved metaRequestId=${requestIdMeta} requestId=${existingRequest.id} installationId=${existingRequest.installation_id} packageName=${existingRequest.package_name} status=${existingRequest.status} method=${req.method}`,
+  );
+
   if (existingRequest.token_used_at) {
     if (wantsBrowserHtml) {
       return renderSimpleHtmlError(
@@ -684,6 +688,10 @@ serve(async (req) => {
     );
   }
 
+  console.log(
+    `[approvals] approved requestId=${approvedRequest.id} installationId=${approvedRequest.installation_id} packageName=${approvedRequest.package_name} approvedAt=${approvedAtIso}`,
+  );
+
   const minutes = Number.isFinite(approvedRequest.minutes) && approvedRequest.minutes > 0
     ? approvedRequest.minutes
     : 60;
@@ -769,6 +777,9 @@ serve(async (req) => {
   };
 
   if (grantInsertError) {
+    console.log(
+      `[approvals] grantInsertError requestId=${approvedRequest.id} installationId=${approvedRequest.installation_id} packageName=${approvedRequest.package_name} error=${grantInsertError.message ?? "unknown"}`,
+    );
     if (grantInsertError.code === "23505") {
       const { data: existingGrant } = await supabase
         .from("unlock_grants")
@@ -779,6 +790,9 @@ serve(async (req) => {
 
       if (existingGrant) {
         const existingGrantRecord = existingGrant as Record<string, unknown>;
+        console.log(
+          `[approvals] grantActiveFound=true source=existing requestId=${approvedRequest.id} installationId=${approvedRequest.installation_id} packageName=${approvedRequest.package_name} unlockUntil=${grantUnlockUntil(existingGrantRecord)}`,
+        );
 
         if (wantsBrowserHtml) {
           return htmlResponse(
@@ -848,6 +862,10 @@ serve(async (req) => {
       serverTime,
     );
   }
+
+  console.log(
+    `[approvals] grantActiveFound=true source=created requestId=${approvedRequest.id} installationId=${approvedRequest.installation_id} packageName=${approvedRequest.package_name} unlockUntil=${grantUnlockUntil(createdGrant)}`,
+  );
 
   if (wantsBrowserHtml) {
     return htmlResponse(

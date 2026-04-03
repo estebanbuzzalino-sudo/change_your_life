@@ -5,14 +5,24 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.ApplicationInfo
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 
 class AppBlockAccessibilityService : AccessibilityService() {
+    private val tag = "AppBlockService"
 
     private var lastBlockedPackage: String? = null
     private var lastLaunchTime: Long = 0L
-    // Cooldown corto para evitar parpadeo, sin dejar "huecos" de desbloqueo.
+    // Cooldown corto para evitar rafagas de relanzamiento.
     private val relaunchCooldownMillis = 500L
+    // Ventana corta de transicion mientras BlockActivity entra en foreground.
+    private val transitionGuardMillis = 800L
+    private val launchAfterHomeDelayMillis = 120L
+    private var transitionGuardPackage: String? = null
+    private var transitionGuardUntil: Long = 0L
+    private val mainHandler = Handler(Looper.getMainLooper())
     private val prefsFileName = "FlutterSharedPreferences"
     private val blockedPackagesKey = "flutter.blocked_packages_csv"
     private val temporaryUnlockedPackagesKey = "flutter.temporary_unlocked_packages_csv"
@@ -68,6 +78,19 @@ class AppBlockAccessibilityService : AccessibilityService() {
             prefs.registerOnSharedPreferenceChangeListener(prefsListener)
             prefsListenerRegistered = true
         }
+
+        Thread {
+            val syncResult = UnlockGrantSyncRepository.syncNow(
+                context = applicationContext,
+                trigger = "service_connected",
+                force = true
+            )
+            refreshTemporarilyUnlockedPackages()
+            Log.i(
+                tag,
+                "grantSync trigger=service_connected requestId=${syncResult.requestId} installationId=${syncResult.installationId} packageName=- activeFound=false success=${syncResult.success}",
+            )
+        }.start()
     }
 
     override fun onDestroy() {
@@ -99,17 +122,49 @@ class AppBlockAccessibilityService : AccessibilityService() {
 
         val now = System.currentTimeMillis()
         val blockedPackages = blockedPackagesCache
+        val isBlocked = blockedPackages.contains(openedPackage)
+        val isUnlockedNow = isTemporarilyUnlocked(openedPackage, now)
 
-        if (blockedPackages.contains(openedPackage) &&
-            !isTemporarilyUnlocked(openedPackage, now)
-        ) {
+        if (isBlocked && !isUnlockedNow) {
+            val grantCheck = UnlockGrantSyncRepository.syncAndCheckPackageBlocking(
+                context = applicationContext,
+                packageName = openedPackage,
+                trigger = "accessibility_pre_block",
+                timeoutMs = 900L
+            )
+            Log.i(
+                tag,
+                "grantCheck trigger=accessibility_pre_block requestId=${grantCheck.requestId} installationId=${grantCheck.installationId} packageName=$openedPackage activeFound=${grantCheck.activeFound} success=${grantCheck.success}",
+            )
+
+            if (grantCheck.activeFound) {
+                refreshTemporarilyUnlockedPackages()
+                return
+            }
+        }
+
+        if (!isBlocked || isUnlockedNow) {
+            if (transitionGuardPackage == openedPackage && now >= transitionGuardUntil) {
+                transitionGuardPackage = null
+            }
+            return
+        }
+
+        if (isBlocked && !isUnlockedNow) {
             // Evita reentrada cuando BlockActivity ya esta visible.
-            if (BlockActivity.isVisible) {
+            if (BlockActivity.isVisible && BlockActivity.visiblePackageName == openedPackage) {
                 return
             }
 
-            // Evita abrir muchas veces seguidas la pantalla de bloqueo.
-            if (now - lastLaunchTime < relaunchCooldownMillis) {
+            // Si la pantalla bloqueada estuvo recien visible para esa app, no relanzar.
+            if (BlockActivity.visiblePackageName == openedPackage &&
+                now - BlockActivity.lastVisibleAtMillis < transitionGuardMillis
+            ) {
+                return
+            }
+
+            // Guard corto por paquete durante la transicion.
+            if (transitionGuardPackage == openedPackage && now < transitionGuardUntil) {
                 return
             }
 
@@ -120,16 +175,36 @@ class AppBlockAccessibilityService : AccessibilityService() {
 
             lastBlockedPackage = openedPackage
             lastLaunchTime = now
+            transitionGuardPackage = openedPackage
+            transitionGuardUntil = now + transitionGuardMillis
 
-            val intent = Intent(this, BlockActivity::class.java)
-            intent.addFlags(
-                Intent.FLAG_ACTIVITY_NEW_TASK or
-                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                    Intent.FLAG_ACTIVITY_CLEAR_TOP
-            )
-            intent.putExtra("appName", getAppLabel(openedPackage))
-            intent.putExtra("packageName", openedPackage)
-            startActivity(intent)
+            // Empuja la app bloqueada a segundo plano antes de mostrar la pantalla de bloqueo.
+            performGlobalAction(GLOBAL_ACTION_HOME)
+            mainHandler.postDelayed({
+                if (BlockActivity.isVisible && BlockActivity.visiblePackageName == openedPackage) {
+                    return@postDelayed
+                }
+
+                val currentNow = System.currentTimeMillis()
+                if (!blockedPackagesCache.contains(openedPackage)) {
+                    return@postDelayed
+                }
+
+                if (isTemporarilyUnlocked(openedPackage, currentNow)) {
+                    return@postDelayed
+                }
+
+                val intent = Intent(this, BlockActivity::class.java)
+                intent.addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_NO_ANIMATION
+                )
+                intent.putExtra("appName", getAppLabel(openedPackage))
+                intent.putExtra("packageName", openedPackage)
+                startActivity(intent)
+            }, launchAfterHomeDelayMillis)
         }
     }
 

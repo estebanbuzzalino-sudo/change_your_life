@@ -28,7 +28,7 @@ class UsageAccessService {
 
       final usageStats = await UsageStats.queryUsageStats(start, now);
 
-      if (usageStats == null || usageStats.isEmpty) return null;
+      if (usageStats.isEmpty) return null;
 
       usageStats.removeWhere(
         (item) =>
@@ -55,7 +55,8 @@ class UsageAccessService {
       };
 
       for (final item in usageStats) {
-        final pkg = item.packageName!;
+        final pkg = item.packageName;
+        if (pkg == null || pkg.isEmpty) continue;
         if (pkg != ownPackageName && !ignoredPackages.contains(pkg)) {
           return pkg;
         }

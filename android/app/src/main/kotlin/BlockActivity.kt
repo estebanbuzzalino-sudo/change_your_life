@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Bundle
+import android.util.Log
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
@@ -14,9 +15,17 @@ import java.nio.charset.StandardCharsets
 import java.util.UUID
 
 class BlockActivity : Activity() {
+    private val tag = "BlockActivity"
+
     companion object {
         @Volatile
         var isVisible: Boolean = false
+
+        @Volatile
+        var visiblePackageName: String? = null
+
+        @Volatile
+        var lastVisibleAtMillis: Long = 0L
     }
 
     private val prefsFileName = "FlutterSharedPreferences"
@@ -31,21 +40,22 @@ class BlockActivity : Activity() {
 
     @Volatile
     private var isRequestInFlight: Boolean = false
+    private lateinit var titleText: TextView
+    private lateinit var packageText: TextView
+    private lateinit var requestUnlockButton: Button
+    private lateinit var closeButton: Button
+    private var currentAppName: String = "App"
+    private var currentPackageName: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_block)
 
-        val appName = intent.getStringExtra("appName") ?: "App"
-        val packageName = intent.getStringExtra("packageName") ?: ""
-
-        val titleText = findViewById<TextView>(R.id.blockTitle)
-        val packageText = findViewById<TextView>(R.id.blockPackage)
-        val requestUnlockButton = findViewById<Button>(R.id.requestUnlockButton)
-        val closeButton = findViewById<Button>(R.id.closeButton)
-
-        titleText.text = "$appName esta bloqueada"
-        packageText.text = "Package: $packageName"
+        titleText = findViewById(R.id.blockTitle)
+        packageText = findViewById(R.id.blockPackage)
+        requestUnlockButton = findViewById(R.id.requestUnlockButton)
+        closeButton = findViewById(R.id.closeButton)
+        bindIntentData(intent)
 
         requestUnlockButton.setOnClickListener {
             if (isRequestInFlight) {
@@ -57,7 +67,7 @@ class BlockActivity : Activity() {
                 return@setOnClickListener
             }
 
-            val request = savePendingUnlockRequest(packageName)
+            val request = savePendingUnlockRequest(currentPackageName)
             if (request == null) {
                 Toast.makeText(this, "No se pudo crear la solicitud.", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
@@ -68,8 +78,8 @@ class BlockActivity : Activity() {
             requestUnlockButton.text = "Enviando..."
 
             sendUnlockRequestAutomatically(
-                appName = appName,
-                packageName = packageName,
+                appName = currentAppName,
+                packageName = currentPackageName,
                 request = request,
                 onSuccess = {
                     isRequestInFlight = false
@@ -99,6 +109,12 @@ class BlockActivity : Activity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        bindIntentData(intent)
+    }
+
     override fun onPause() {
         super.onPause()
     }
@@ -106,6 +122,16 @@ class BlockActivity : Activity() {
     override fun onStart() {
         super.onStart()
         isVisible = true
+        visiblePackageName = currentPackageName
+        lastVisibleAtMillis = System.currentTimeMillis()
+        syncRemoteGrantsOnShow()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        isVisible = true
+        visiblePackageName = currentPackageName
+        lastVisibleAtMillis = System.currentTimeMillis()
     }
 
     override fun onStop() {
@@ -115,6 +141,7 @@ class BlockActivity : Activity() {
 
     override fun onDestroy() {
         isVisible = false
+        visiblePackageName = null
         super.onDestroy()
     }
 
@@ -153,6 +180,17 @@ class BlockActivity : Activity() {
         return requestToSave
     }
 
+    private fun bindIntentData(intent: Intent?) {
+        currentAppName = intent?.getStringExtra("appName")?.takeIf { it.isNotBlank() } ?: "App"
+        currentPackageName = intent?.getStringExtra("packageName") ?: ""
+
+        titleText.text = "$currentAppName esta bloqueada"
+        packageText.text = "Package: $currentPackageName"
+
+        visiblePackageName = currentPackageName
+        lastVisibleAtMillis = System.currentTimeMillis()
+    }
+
     private fun navigateToHome() {
         val homeIntent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_HOME)
@@ -160,6 +198,32 @@ class BlockActivity : Activity() {
         }
         startActivity(homeIntent)
         finish()
+    }
+
+    private fun syncRemoteGrantsOnShow() {
+        val packageName = currentPackageName.trim()
+        if (packageName.isEmpty()) return
+
+        Thread {
+            val syncResult = UnlockGrantSyncRepository.syncNow(
+                context = applicationContext,
+                trigger = "block_activity_show",
+                force = true
+            )
+            val activeFound = UnlockGrantSyncRepository.hasActiveUnlockForPackage(
+                context = applicationContext,
+                packageName = packageName
+            )
+            Log.i(
+                tag,
+                "grantSync trigger=block_activity_show requestId=${syncResult.requestId} installationId=${syncResult.installationId} packageName=$packageName activeFound=$activeFound success=${syncResult.success}",
+            )
+            if (activeFound) {
+                runOnUiThread {
+                    finish()
+                }
+            }
+        }.start()
     }
 
     private fun sendUnlockRequestAutomatically(
@@ -183,6 +247,10 @@ class BlockActivity : Activity() {
         val safeFriendName = friendName.ifBlank { "amigo responsable" }
         val safeRequesterName = requesterName.ifBlank { "Usuario actual" }
         val installationId = getOrCreateInstallationId(prefs)
+        Log.i(
+            tag,
+            "unlockRequestSend installationId=$installationId packageName=$packageName requestId=${request.requestId}",
+        )
 
         val payload = JSONObject().apply {
             put("packageName", packageName)
@@ -199,11 +267,19 @@ class BlockActivity : Activity() {
             runOnUiThread {
                 if (result.success) {
                     val backendRequestId = result.requestId
+                    Log.i(
+                        tag,
+                        "unlockRequestOk installationId=$installationId packageName=$packageName requestId=$backendRequestId",
+                    )
                     if (!backendRequestId.isNullOrBlank()) {
                         updatePendingRequestIdFromBackend(packageName, request, backendRequestId)
                     }
                     onSuccess()
                 } else {
+                    Log.w(
+                        tag,
+                        "unlockRequestFail installationId=$installationId packageName=$packageName requestId=${request.requestId} error=${result.errorMessage}",
+                    )
                     onFailure(result.errorMessage ?: "error desconocido")
                 }
             }
