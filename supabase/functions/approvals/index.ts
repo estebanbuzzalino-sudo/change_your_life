@@ -107,6 +107,7 @@ function renderApprovalPage(params: {
   appName?: string;
   requesterName?: string;
   minutes?: number;
+  durationRequestedLabel?: string;
   message?: string;
   approveActionPath?: string;
   showApproveButton?: boolean;
@@ -116,11 +117,13 @@ function renderApprovalPage(params: {
   const requesterName = params.requesterName ? escapeHtml(params.requesterName) : "-";
   const minutes = typeof params.minutes === "number" && params.minutes > 0 ? params.minutes : DEFAULT_UNLOCK_MINUTES;
   const message = params.message ? escapeHtml(params.message) : "";
+  const durationRequestedLabel = params.durationRequestedLabel
+    ? escapeHtml(params.durationRequestedLabel)
+    : `${minutes} minutos`;
   const approveActionPath = params.approveActionPath
     ? escapeHtml(params.approveActionPath)
     : "";
   const showApproveButton = Boolean(params.showApproveButton && approveActionPath);
-  const defaultDurationPreview = `Duracion seleccionada: ${minutes} minutos`;
 
   return `<!doctype html>
 <html lang="es">
@@ -223,6 +226,14 @@ function renderApprovalPage(params: {
       border-radius: 8px;
       font-size: 14px;
     }
+    .duration-option select {
+      min-width: 90px;
+      padding: 6px 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 14px;
+      background: #fff;
+    }
     .duration-preview {
       margin-top: 8px;
       padding: 9px 10px;
@@ -246,7 +257,7 @@ function renderApprovalPage(params: {
         <div class="label">Solicitante</div>
         <div class="value">${requesterName}</div>
         <div class="label">Duracion solicitada</div>
-        <div class="value">${minutes} minutos</div>
+        <div class="value">${durationRequestedLabel}</div>
       </div>
 
       ${message ? `<div class="msg">${message}</div>` : ""}
@@ -257,19 +268,31 @@ function renderApprovalPage(params: {
           <div class="duration-title">Elegi cuanto tiempo queres aprobar</div>
           <label class="duration-option">
             <input type="radio" name="durationMode" value="minutes" checked />
-            <span>60 minutos</span>
+            <select id="minutesSelect" name="minutes">
+              <option value="10" selected>10</option>
+              <option value="15">15</option>
+              <option value="20">20</option>
+              <option value="25">25</option>
+              <option value="30">30</option>
+              <option value="35">35</option>
+              <option value="40">40</option>
+              <option value="45">45</option>
+              <option value="50">50</option>
+              <option value="55">55</option>
+              <option value="60">60</option>
+            </select>
+            <span>minutos</span>
           </label>
           <label class="duration-option">
             <input type="radio" name="durationMode" value="days" />
-            <span>X dias</span>
             <input id="daysInput" type="number" name="days" min="1" max="${MAX_DAYS_DURATION}" value="1" disabled />
+            <span>dias</span>
           </label>
           <label class="duration-option">
             <input type="radio" name="durationMode" value="permanent" />
             <span>Desbloqueo permanente</span>
           </label>
-          <input type="hidden" name="minutes" value="${minutes}" />
-          <div id="durationPreview" class="duration-preview">${escapeHtml(defaultDurationPreview)}</div>
+          <div id="durationPreview" class="duration-preview">Duracion seleccionada: 10 minutos</div>
         </div>
         <button class="btn" type="submit">Aprobar desbloqueo</button>
       </form>
@@ -278,8 +301,8 @@ function renderApprovalPage(params: {
         (function () {
           const modeInputs = Array.from(document.querySelectorAll('input[name="durationMode"]'));
           const daysInput = document.getElementById('daysInput');
+          const minutesSelect = document.getElementById('minutesSelect');
           const preview = document.getElementById('durationPreview');
-          const requestedMinutes = ${minutes};
 
           function safeDays() {
             const parsed = Number.parseInt(daysInput.value || '1', 10);
@@ -289,10 +312,19 @@ function renderApprovalPage(params: {
             return parsed;
           }
 
+          function safeMinutes() {
+            const parsed = Number.parseInt(minutesSelect.value || '10', 10);
+            if (!Number.isFinite(parsed)) return 10;
+            if (parsed < 10) return 10;
+            if (parsed > 60) return 60;
+            return Math.round(parsed / 5) * 5;
+          }
+
           function updatePreview() {
             const selected = modeInputs.find((input) => input.checked);
             const mode = selected ? selected.value : 'minutes';
             daysInput.disabled = mode !== 'days';
+            minutesSelect.disabled = mode !== 'minutes';
 
             if (mode === 'days') {
               preview.textContent = 'Duracion seleccionada: ' + safeDays() + ' dia(s)';
@@ -302,11 +334,12 @@ function renderApprovalPage(params: {
               preview.textContent = 'Duracion seleccionada: desbloqueo permanente';
               return;
             }
-            preview.textContent = 'Duracion seleccionada: ' + requestedMinutes + ' minutos';
+            preview.textContent = 'Duracion seleccionada: ' + safeMinutes() + ' minutos';
           }
 
           modeInputs.forEach((input) => input.addEventListener('change', updatePreview));
           daysInput.addEventListener('input', updatePreview);
+          minutesSelect.addEventListener('change', updatePreview);
           updatePreview();
         })();
       </script>`
@@ -799,6 +832,7 @@ serve(async (req) => {
           appName: existingRequest.app_name,
           requesterName: existingRequest.requester_name,
           minutes: existingRequest.minutes,
+          durationRequestedLabel: `${parsePositiveInt(existingRequest.minutes) ?? DEFAULT_UNLOCK_MINUTES} minutos`,
           message: "Si aprobas, la app se desbloquea por el tiempo elegido y despues vuelve a bloquearse.",
           approveActionPath: approvePath,
           showApproveButton: true,
@@ -1007,6 +1041,7 @@ serve(async (req) => {
               appName: approvedRequest.app_name,
               requesterName: approvedRequest.requester_name,
               minutes: grantMinutes(existingGrantRecord),
+              durationRequestedLabel: resolvedDuration.durationLabel,
               message: `Desbloqueo aprobado por ${resolvedDuration.durationLabel}. Activo hasta ${grantUnlockUntil(existingGrantRecord)}.`,
               showApproveButton: false,
             }),
@@ -1082,6 +1117,7 @@ serve(async (req) => {
         appName: approvedRequest.app_name,
         requesterName: approvedRequest.requester_name,
         minutes: grantMinutes(createdGrant),
+        durationRequestedLabel: resolvedDuration.durationLabel,
         message: `Desbloqueo aprobado por ${resolvedDuration.durationLabel}. Activo hasta ${grantUnlockUntil(createdGrant)}.`,
         showApproveButton: false,
       }),

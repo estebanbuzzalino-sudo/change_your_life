@@ -89,6 +89,14 @@
       border-radius: 8px;
       font-size: 14px;
     }
+    .duration-option select {
+      min-width: 90px;
+      padding: 6px 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 14px;
+      background: #fff;
+    }
     .preview {
       margin-top: 10px;
       padding: 10px;
@@ -151,13 +159,26 @@
 
         <label class="duration-option">
           <input type="radio" name="durationMode" value="minutes" checked />
-          <span>60 minutos</span>
+          <select id="minutesSelect">
+            <option value="10" selected>10</option>
+            <option value="15">15</option>
+            <option value="20">20</option>
+            <option value="25">25</option>
+            <option value="30">30</option>
+            <option value="35">35</option>
+            <option value="40">40</option>
+            <option value="45">45</option>
+            <option value="50">50</option>
+            <option value="55">55</option>
+            <option value="60">60</option>
+          </select>
+          <span>minutos</span>
         </label>
 
         <label class="duration-option">
           <input type="radio" name="durationMode" value="days" />
-          <span>X dias</span>
           <input id="daysInput" type="number" min="1" max="30" value="1" disabled />
+          <span>dias</span>
         </label>
 
         <label class="duration-option">
@@ -165,7 +186,7 @@
           <span>Desbloqueo permanente</span>
         </label>
 
-        <div id="durationPreview" class="preview">Aprobacion seleccionada: 60 minutos</div>
+        <div id="durationPreview" class="preview">Aprobacion seleccionada: 10 minutos</div>
       </div>
 
       <button id="approveBtn" class="button" style="display:none;">Aprobar desbloqueo</button>
@@ -184,13 +205,12 @@
     const durationCard = document.getElementById("durationCard");
     const durationPreviewEl = document.getElementById("durationPreview");
     const daysInput = document.getElementById("daysInput");
+    const minutesSelect = document.getElementById("minutesSelect");
     const durationModeInputs = Array.from(document.querySelectorAll('input[name="durationMode"]'));
 
     const params = new URLSearchParams(window.location.search);
     const token = (params.get("token") || "").trim();
     const apiBase = (params.get("apiBase") || "https://oggqvcjtvfgyagaisvmj.functions.supabase.co").replace(/\/+$/, "");
-
-    let requestedMinutes = 60;
 
     function setStatus(text, tone) {
       statusChip.textContent = text;
@@ -218,6 +238,14 @@
       return parsed;
     }
 
+    function getSafeMinutes() {
+      const parsed = Number.parseInt(minutesSelect.value || "10", 10);
+      if (!Number.isFinite(parsed)) return 10;
+      if (parsed < 10) return 10;
+      if (parsed > 60) return 60;
+      return Math.round(parsed / 5) * 5;
+    }
+
     function getDurationPayload() {
       const mode = getSelectedDurationMode();
       if (mode === "days") {
@@ -233,7 +261,7 @@
       }
       return {
         durationMode: "minutes",
-        minutes: requestedMinutes > 0 ? requestedMinutes : 60,
+        minutes: getSafeMinutes(),
       };
     }
 
@@ -251,7 +279,8 @@
         return;
       }
 
-      const minutes = requestedMinutes > 0 ? requestedMinutes : 60;
+      minutesSelect.disabled = mode !== "minutes";
+      const minutes = getSafeMinutes();
       durationPreviewEl.textContent = `Aprobacion seleccionada: ${minutes} minutos`;
     }
 
@@ -292,7 +321,7 @@
       }
 
       const data = body.data || {};
-      requestedMinutes = Number.isFinite(Number(data.minutes)) && Number(data.minutes) > 0
+      const requestedMinutes = Number.isFinite(Number(data.minutes)) && Number(data.minutes) > 0
         ? Number(data.minutes)
         : 60;
       setInfo(data.appName, data.requesterName, requestedMinutes);
@@ -325,6 +354,7 @@
       input.addEventListener("change", updateDurationPreview);
     });
     daysInput.addEventListener("input", updateDurationPreview);
+    minutesSelect.addEventListener("change", updateDurationPreview);
 
     approveBtn.addEventListener("click", async () => {
       approveBtn.disabled = true;
@@ -345,6 +375,7 @@
         const data = body.data || {};
         setStatus("Aprobado", "ok");
         const durationLabel = data.durationLabel || durationPreviewEl.textContent.replace("Aprobacion seleccionada: ", "");
+        requestedDurationEl.textContent = durationLabel;
         messageEl.textContent = `Desbloqueo aprobado por ${durationLabel}. Activo hasta ${data.unlockUntil || "-"}.`;
         messageEl.className = "msg ok";
         approveBtn.style.display = "none";

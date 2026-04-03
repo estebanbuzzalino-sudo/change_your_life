@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:installed_apps/installed_apps.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/app_block.dart';
 import '../services/unlock_grants_sync_service.dart';
@@ -69,11 +70,15 @@ class _ReplacementSuggestion {
   final String title;
   final String action;
   final IconData icon;
+  final String playStorePackageId;
+  final String playStoreQuery;
 
   const _ReplacementSuggestion({
     required this.title,
     required this.action,
     required this.icon,
+    required this.playStorePackageId,
+    required this.playStoreQuery,
   });
 }
 
@@ -152,21 +157,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         title: 'Lectura de 10 minutos',
         action: 'Elegi un articulo o capitulo corto y marca un objetivo simple.',
         icon: Icons.chrome_reader_mode_rounded,
+        playStorePackageId: 'com.google.android.apps.books',
+        playStoreQuery: 'Google Play Books',
       ),
       _ReplacementSuggestion(
         title: 'Podcast educativo',
         action: 'Escucha un episodio breve mientras caminas o te preparas algo.',
         icon: Icons.podcasts_rounded,
+        playStorePackageId: 'com.spotify.music',
+        playStoreQuery: 'Spotify podcast',
       ),
       _ReplacementSuggestion(
         title: 'Curso rapido',
         action: 'Avanza una leccion de algun curso que ya tengas guardado.',
         icon: Icons.school_rounded,
+        playStorePackageId: 'org.khanacademy.android',
+        playStoreQuery: 'Khan Academy',
       ),
       _ReplacementSuggestion(
         title: 'Idioma en micro sesiones',
         action: 'Practica 15 minutos de vocabulario o escucha activa.',
         icon: Icons.translate_rounded,
+        playStorePackageId: 'com.duolingo',
+        playStoreQuery: 'Duolingo',
       ),
     ],
     'wellbeing_training': [
@@ -174,21 +187,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         title: 'Respiracion guiada',
         action: 'Haz 3 minutos de respiracion profunda para bajar ansiedad.',
         icon: Icons.air_rounded,
+        playStorePackageId: 'com.calm.android',
+        playStoreQuery: 'Calm meditación',
       ),
       _ReplacementSuggestion(
         title: 'Estiramiento breve',
         action: 'Mueve cuello, hombros y espalda durante 5 a 10 minutos.',
         icon: Icons.accessibility_new_rounded,
+        playStorePackageId: 'com.nike.ntc',
+        playStoreQuery: 'entrenamiento estiramiento',
       ),
       _ReplacementSuggestion(
         title: 'Caminata corta',
         action: 'Sal a caminar 15 minutos para cambiar de foco mental.',
         icon: Icons.directions_walk_rounded,
+        playStorePackageId: 'com.google.android.apps.fitness',
+        playStoreQuery: 'Google Fit caminar',
       ),
       _ReplacementSuggestion(
         title: 'Mini rutina',
         action: 'Completa una rutina de cuerpo completo de 12 minutos.',
         icon: Icons.fitness_center_rounded,
+        playStorePackageId: 'homeworkout.homeworkouts.noequipment',
+        playStoreQuery: 'home workout',
       ),
     ],
     'music_creativity': [
@@ -196,21 +217,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         title: 'Playlist enfocada',
         action: 'Escucha musica instrumental para trabajar o relajarte.',
         icon: Icons.queue_music_rounded,
+        playStorePackageId: 'com.spotify.music',
+        playStoreQuery: 'Spotify',
       ),
       _ReplacementSuggestion(
         title: 'Escritura libre',
         action: 'Anota ideas, pendientes o un diario rapido de 10 minutos.',
         icon: Icons.edit_note_rounded,
+        playStorePackageId: 'com.microsoft.office.onenote',
+        playStoreQuery: 'OneNote',
       ),
       _ReplacementSuggestion(
         title: 'Dibujo o boceto',
         action: 'Haz un boceto simple para activar creatividad sin presion.',
         icon: Icons.brush_rounded,
+        playStorePackageId: 'com.adsk.sketchbook',
+        playStoreQuery: 'Sketchbook',
       ),
       _ReplacementSuggestion(
         title: 'Practica musical',
         action: 'Si tocas un instrumento, practica una cancion corta.',
         icon: Icons.piano_rounded,
+        playStorePackageId: 'com.bandlab.bandlab',
+        playStoreQuery: 'BandLab',
       ),
     ],
     'focus_games': [
@@ -218,21 +247,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         title: 'Sudoku o logica',
         action: 'Resuelve un desafio de logica para entrenar concentracion.',
         icon: Icons.grid_view_rounded,
+        playStorePackageId: 'easy.sudoku.puzzle.solver.free',
+        playStoreQuery: 'sudoku',
       ),
       _ReplacementSuggestion(
         title: 'Ajedrez tactico',
         action: 'Juega una partida corta o un problema tactico.',
         icon: Icons.extension_rounded,
+        playStorePackageId: 'com.chess',
+        playStoreQuery: 'chess',
       ),
       _ReplacementSuggestion(
         title: 'Memoria activa',
         action: 'Usa ejercicios de memoria durante 10 minutos.',
         icon: Icons.psychology_rounded,
+        playStorePackageId: 'com.peak.app',
+        playStoreQuery: 'Peak brain training',
       ),
       _ReplacementSuggestion(
         title: 'Desafio de foco',
         action: 'Configura 25 minutos de foco total en una tarea concreta.',
         icon: Icons.timer_rounded,
+        playStorePackageId: 'com.pomodrone.app',
+        playStoreQuery: 'Pomodoro timer',
       ),
     ],
   };
@@ -910,6 +947,44 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     await _saveReplacementChoices();
   }
 
+  Future<void> _openReplacementInStore(_ReplacementSuggestion suggestion) async {
+    try {
+      final marketUri = Uri.parse(
+        'market://details?id=${Uri.encodeComponent(suggestion.playStorePackageId)}',
+      );
+      final webUri = Uri.parse(
+        'https://play.google.com/store/apps/details?id=${Uri.encodeComponent(suggestion.playStorePackageId)}',
+      );
+      final searchUri = Uri.parse(
+        'https://play.google.com/store/search?q=${Uri.encodeComponent(suggestion.playStoreQuery)}&c=apps',
+      );
+
+      final launchedMarket = await launchUrl(
+        marketUri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (launchedMarket) return;
+
+      final launchedWeb = await launchUrl(
+        webUri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (launchedWeb) return;
+
+      final launchedSearch = await launchUrl(
+        searchUri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launchedSearch && mounted) {
+        _showMessage('No se pudo abrir Play Store en este momento.');
+      }
+    } catch (_) {
+      if (mounted) {
+        _showMessage('No se pudo abrir Play Store en este momento.');
+      }
+    }
+  }
+
   void _showReplacementIdeas(_ReplacementOption option) {
     final ideas = _replacementSuggestionsByOptionId[option.id] ?? const [];
     if (ideas.isEmpty) return;
@@ -944,11 +1019,38 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Card(
                       margin: EdgeInsets.zero,
-                      child: ListTile(
-                        dense: true,
-                        leading: Icon(idea.icon),
-                        title: Text(idea.title),
-                        subtitle: Text(idea.action),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(idea.icon, size: 20),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    idea.title,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(idea.action),
+                            const SizedBox(height: 6),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton.icon(
+                                onPressed: () => _openReplacementInStore(idea),
+                                icon: const Icon(Icons.open_in_new_rounded),
+                                label: const Text('Abrir en Play Store'),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -1389,10 +1491,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  List<String> get _selectedReplacementTitles {
+  List<_ReplacementOption> get _selectedReplacementOptions {
     return _replacementOptions
         .where((option) => _selectedReplacementIds.contains(option.id))
-        .map((option) => option.title)
         .toList();
   }
 
@@ -1601,7 +1702,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: WizardStepShell(
         stepLabel: 'Paso 3 de 3',
         title: 'Elegi con que queres reemplazar ese tiempo',
-        subtitle: 'Elegi alternativas positivas para aprovechar mejor tu tiempo',
+        subtitle: 'Elegi categorias para personalizar tus sugerencias y abrir opciones concretas',
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -1619,6 +1720,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     SizedBox(height: 6),
                     Text(
                       'Estas opciones funcionan como reemplazos positivos: bienestar, aprendizaje, musica y juegos didacticos.',
+                    ),
+                    SizedBox(height: 6),
+                    Text(
+                      'Cuando elegis una categoria, la guardamos en tu plan y ademas podes abrir apps sugeridas al instante.',
                     ),
                   ],
                 ),
@@ -1644,7 +1749,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       child: TextButton.icon(
                         onPressed: () => _showReplacementIdeas(option),
                         icon: const Icon(Icons.tips_and_updates_outlined),
-                        label: const Text('Ver ideas concretas'),
+                        label: const Text('Ver apps sugeridas'),
                       ),
                     ),
                   ],
@@ -1675,6 +1780,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget _buildSummaryStep() {
     final selectedActiveBlocks = _selectedActiveBlocks();
     final isBlockingActive = _hasSelectedAppsActiveBlock;
+    final selectedReplacementOptions = _selectedReplacementOptions;
     String remainingOverview = 'Aun no hay un bloqueo activo para las apps elegidas.';
     if (selectedActiveBlocks.isNotEmpty) {
       DateTime nearestEnd = selectedActiveBlocks.first.endDate;
@@ -1691,7 +1797,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: WizardStepShell(
         stepLabel: null,
         title: 'Resumen final',
-        subtitle: 'Asi quedo configurado tu plan de bloqueo.',
+        subtitle: 'Asi quedo configurado tu plan y como vamos a acompanarte.',
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -1720,7 +1826,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Apps a bloquear',
+                      'Plan configurado',
                       style: TextStyle(fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 8),
@@ -1736,55 +1842,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           return Chip(label: Text(appName));
                         }).toList(),
                       ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
+                    const Divider(height: 22),
+                    Row(
                       children: [
-                        Icon(Icons.schedule_rounded),
-                        SizedBox(width: 8),
-                        Text(
-                          'Duracion elegida',
-                          style: TextStyle(fontWeight: FontWeight.w700),
-                        ),
+                        const Icon(Icons.schedule_rounded, size: 18),
+                        const SizedBox(width: 8),
+                        Text('Duracion elegida: $durationText'),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    Text(durationText, style: const TextStyle(fontSize: 16)),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
+                    const SizedBox(height: 8),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.group_rounded),
-                        SizedBox(width: 8),
-                        Text(
-                          'Amigo responsable',
-                          style: TextStyle(fontWeight: FontWeight.w700),
+                        const Icon(Icons.group_rounded, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _hasFriendConfigured
+                                ? 'Amigo responsable: ${friendName ?? ''} - ${friendEmail ?? ''}'
+                                : 'Amigo responsable: no definido',
+                          ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _hasFriendConfigured
-                          ? '${friendName ?? ''} - ${friendEmail ?? ''}'
-                          : 'No definido',
                     ),
                   ],
                 ),
@@ -1799,7 +1878,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Estado por app bloqueada',
+                        'Tiempo por app bloqueada',
                         style: TextStyle(fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 8),
@@ -1835,99 +1914,117 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Apps utiles seleccionadas',
+                      'Reemplazos elegidos',
                       style: TextStyle(fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 8),
-                    if (_selectedReplacementTitles.isEmpty)
-                      const Text('No seleccionaste alternativas por ahora.')
+                    if (selectedReplacementOptions.isEmpty)
+                      const Text(
+                        'No elegiste categorias todavia. Podes volver al Paso 3 para sumar ideas utiles.',
+                      )
                     else
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: _selectedReplacementTitles
-                            .map((title) => Chip(label: Text(title)))
-                            .toList(),
+                      ...selectedReplacementOptions.map(
+                        (option) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Card(
+                            margin: EdgeInsets.zero,
+                            child: ListTile(
+                              leading: Icon(option.icon),
+                              title: Text(option.title),
+                              subtitle: const Text(
+                                'Abrir sugerencias concretas para esta categoria.',
+                              ),
+                              trailing: OutlinedButton(
+                                onPressed: () => _showReplacementIdeas(option),
+                                child: const Text('Ver apps'),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 20),
-            _buildSectionHeader(
-              icon: Icons.insights_rounded,
-              title: 'Seguimiento',
-              subtitle: 'Accesos rapidos para mantener control del estado actual.',
-            ),
             const SizedBox(height: 10),
-            OutlinedButton.icon(
-              onPressed: _openPendingRequestsScreen,
-              icon: const Icon(Icons.pending_actions_rounded),
-              label: Text('Solicitudes pendientes (${pendingRequests.length})'),
-            ),
-            const SizedBox(height: 8),
-            if (pendingRequests.isEmpty)
-              _buildEmptyStateCard(
-                icon: Icons.mark_email_read_outlined,
-                message: 'No hay solicitudes pendientes en este momento.',
-              )
-            else
-              ...pendingRequests.take(3).map((request) {
-                final appName = _displayNameForPackage(request.packageName);
-                return Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.mark_email_unread_outlined),
-                    title: Text(appName),
-                    subtitle: Text(_pendingRequestedAtText(request)),
-                  ),
-                );
-              }),
-            if (pendingRequests.length > 3)
-              Padding(
-                padding: const EdgeInsets.only(left: 4, right: 4, bottom: 8),
-                child: Text(
-                  'Mostrando 3 de ${pendingRequests.length} solicitudes. Abri el detalle para ver todas.',
-                  style: const TextStyle(color: Colors.black54),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Gestion de desbloqueos',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Solicitudes pendientes: pedidos de desbloqueo que todavia debe aprobar tu amigo responsable.',
+                      style: TextStyle(color: Colors.black54),
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: _openPendingRequestsScreen,
+                      icon: const Icon(Icons.pending_actions_rounded),
+                      label: Text(
+                        'Solicitudes pendientes (${pendingRequests.length})',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (pendingRequests.isEmpty)
+                      const Text(
+                        'No hay solicitudes pendientes en este momento.',
+                      )
+                    else
+                      ...pendingRequests.take(2).map((request) {
+                        final appName = _displayNameForPackage(request.packageName);
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.mark_email_unread_outlined, size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '$appName - ${_pendingRequestedAtText(request)}',
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    const Divider(height: 20),
+                    const Text(
+                      'Desbloqueos temporales activos',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 8),
+                    if (temporaryUnlockedApps.isEmpty)
+                      const Text('No hay desbloqueos temporales activos.')
+                    else
+                      ...temporaryUnlockedApps.map((item) {
+                        final remaining = _remainingMinutes(item);
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.lock_open_rounded, size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(_displayNameForPackage(item.packageName)),
+                              ),
+                              Text(
+                                '$remaining min',
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                  ],
                 ),
               ),
-            const SizedBox(height: 4),
-            if (temporaryUnlockedApps.isEmpty)
-              _buildEmptyStateCard(
-                icon: Icons.hourglass_empty_rounded,
-                message: 'No hay desbloqueos temporales activos.',
-              )
-            else
-              ...temporaryUnlockedApps.map((item) {
-                final remaining = _remainingMinutes(item);
-                return Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.lock_open_rounded),
-                    title: Text(_displayNameForPackage(item.packageName)),
-                    subtitle: Text('Tiempo restante: $remaining min'),
-                    trailing: Chip(label: Text('$remaining min')),
-                  ),
-                );
-              }),
-            const SizedBox(height: 8),
-            if (activeBlocks.isEmpty)
-              _buildEmptyStateCard(
-                icon: Icons.lock_open_rounded,
-                message: 'Todavia no hay bloqueos activos.',
-              )
-            else
-              ...activeBlocks.map((block) {
-                final appName = block.appName.trim().isNotEmpty
-                    ? block.appName.trim()
-                    : _displayNameForPackage(block.packageName);
-                return Card(
-                  child: ListTile(
-                    onTap: () => _openBlockScreen(block),
-                    leading: const Icon(Icons.lock_rounded),
-                    title: Text(appName),
-                    subtitle: Text('Hasta: ${_formatDate(block.endDate)}'),
-                  ),
-                );
-              }),
+            ),
             const SizedBox(height: 8),
             OutlinedButton(
               onPressed: _clearAllData,

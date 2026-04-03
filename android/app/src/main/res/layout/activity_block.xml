@@ -23,7 +23,7 @@
         android:layout_height="wrap_content"
         android:layout_marginBottom="10dp"
         android:gravity="center"
-        android:text="Este momento puede servirte para cambiar de aire y hacer algo que te haga bien."
+        android:text="Recorda por que bloqueaste esta app: este es tu momento para elegir algo que te haga bien."
         android:textColor="#263238"
         android:textSize="18sp" />
 
@@ -33,7 +33,7 @@
         android:layout_height="wrap_content"
         android:layout_marginBottom="26dp"
         android:gravity="center"
-        android:text="Elegi una alternativa positiva para sostener el cambio."
+        android:text="Proba leer unos minutos, moverte, respirar o avanzar con algo importante."
         android:textColor="#455A64"
         android:textSize="15sp" />
 
@@ -42,7 +42,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="8dp"
-        android:text="Ver alternativas"
+        android:text="Ver alternativas ahora"
         android:textAllCaps="false" />
 
     <TextView
@@ -51,7 +51,7 @@
         android:layout_height="wrap_content"
         android:layout_marginBottom="18dp"
         android:gravity="center"
-        android:text="Encontra algo util para hacer ahora."
+        android:text="No te olvides: si la bloqueaste, fue por una razon."
         android:textColor="#546E7A"
         android:textSize="13sp" />
 
