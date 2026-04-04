@@ -48,6 +48,7 @@ class UnlockGrantSyncResult {
 class UnlockGrantsSyncService {
   static const String _installationIdKey = 'installation_id';
   static const String _temporaryUnlockedKey = 'temporary_unlocked_packages_csv';
+  static const String _ignoredUnlockGrantsKey = 'ignored_unlock_grants_csv';
   static const String _endpoint =
       'https://oggqvcjtvfgyagaisvmj.functions.supabase.co/unlock-grants/active';
   static const int _minSyncIntervalMillis = 10 * 1000;
@@ -137,6 +138,9 @@ class UnlockGrantsSyncService {
       final requestId = (meta['requestId'] ?? data['requestId'])?.toString();
       final serverTime = (data['serverTime'] ?? meta['serverTime'])?.toString();
       final serverMillis = DateTime.tryParse(serverTime ?? '')?.millisecondsSinceEpoch ?? now;
+      final ignoredGrantKeys = _parseIgnoredGrantKeys(
+        prefs.getString(_ignoredUnlockGrantsKey) ?? '',
+      );
 
       final grantsRaw = data['grants'];
       final remoteByPackage = <String, int>{};
@@ -147,6 +151,14 @@ class UnlockGrantsSyncService {
           final package = (item['packageName'] ?? item['package_name'] ?? '')
               .toString()
               .trim();
+          final grantRequestId = (item['requestId'] ?? item['request_id'] ?? '')
+              .toString()
+              .trim();
+          if (package.isNotEmpty &&
+              grantRequestId.isNotEmpty &&
+              ignoredGrantKeys.contains('$package|$grantRequestId')) {
+            continue;
+          }
           final unlockUntil = (item['unlockUntil'] ?? item['unlock_until'] ?? '')
               .toString()
               .trim();
@@ -158,7 +170,7 @@ class UnlockGrantsSyncService {
           final existing = remoteByPackage[package];
           if (existing == null || untilMillis > existing) {
             remoteByPackage[package] = untilMillis;
-            final requestId = (item['requestId'] ?? item['request_id'])?.toString();
+            final requestId = grantRequestId;
             final appName = (item['appName'] ?? item['app_name'])?.toString();
             final minutesRaw = int.tryParse((item['minutes'] ?? '').toString());
             remoteGrantDetails[package] = UnlockGrantActiveGrant(
@@ -275,6 +287,24 @@ class UnlockGrantsSyncService {
 
   String _serializeTemporaryUnlockedCsv(Map<String, int> unlocked) {
     return unlocked.entries.map((entry) => '${entry.key}|${entry.value}').join(',');
+  }
+
+  Set<String> _parseIgnoredGrantKeys(String csv) {
+    final keys = <String>{};
+    if (csv.trim().isEmpty) return keys;
+
+    for (final raw in csv.split(',')) {
+      final entry = raw.trim();
+      if (entry.isEmpty || !entry.contains('|')) continue;
+
+      final separatorIndex = entry.indexOf('|');
+      final packageName = entry.substring(0, separatorIndex).trim();
+      final requestId = entry.substring(separatorIndex + 1).trim();
+      if (packageName.isEmpty || requestId.isEmpty) continue;
+
+      keys.add('$packageName|$requestId');
+    }
+    return keys;
   }
 
   bool _hasActiveForPackage(

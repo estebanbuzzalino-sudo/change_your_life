@@ -18,6 +18,7 @@ object UnlockGrantSyncRepository {
     private const val TAG = "UnlockGrantSync"
     private const val PREFS_FILE_NAME = "FlutterSharedPreferences"
     private const val TEMPORARY_UNLOCKED_KEY = "flutter.temporary_unlocked_packages_csv"
+    private const val IGNORED_UNLOCK_GRANTS_KEY = "flutter.ignored_unlock_grants_csv"
     private const val INSTALLATION_ID_KEY = "flutter.installation_id"
     private const val ACTIVE_GRANTS_ENDPOINT =
         "https://oggqvcjtvfgyagaisvmj.functions.supabase.co/unlock-grants/active"
@@ -185,6 +186,9 @@ object UnlockGrantSyncRepository {
             val serverTime = data?.optString("serverTime")?.takeIf { it.isNotBlank() }
                 ?: meta?.optString("serverTime")?.takeIf { it.isNotBlank() }
             val referenceNow = parseIsoMillis(serverTime) ?: System.currentTimeMillis()
+            val ignoredGrantKeys = parseIgnoredGrantKeys(
+                prefs.getString(IGNORED_UNLOCK_GRANTS_KEY, "") ?: "",
+            )
 
             val remoteByPackage = LinkedHashMap<String, Long>()
             val grants = data?.optJSONArray("grants")
@@ -194,6 +198,15 @@ object UnlockGrantSyncRepository {
                     val packageName = item.optString("packageName")
                         .ifBlank { item.optString("package_name") }
                         .trim()
+                    val grantRequestId = item.optString("requestId")
+                        .ifBlank { item.optString("request_id") }
+                        .trim()
+                    if (packageName.isNotBlank() &&
+                        grantRequestId.isNotBlank() &&
+                        ignoredGrantKeys.contains("$packageName|$grantRequestId")
+                    ) {
+                        continue
+                    }
                     val unlockUntilIso = item.optString("unlockUntil")
                         .ifBlank { item.optString("unlock_until") }
                         .trim()
@@ -288,6 +301,22 @@ object UnlockGrantSyncRepository {
 
     private fun serializeTemporaryUnlockedCsv(entries: Map<String, Long>): String {
         return entries.entries.joinToString(",") { "${it.key}|${it.value}" }
+    }
+
+    private fun parseIgnoredGrantKeys(csv: String): Set<String> {
+        if (csv.isBlank()) return emptySet()
+
+        val ignored = LinkedHashSet<String>()
+        csv.split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && it.contains("|") }
+            .forEach { entry ->
+                val packageName = entry.substringBefore("|").trim()
+                val requestId = entry.substringAfter("|", "").trim()
+                if (packageName.isBlank() || requestId.isBlank()) return@forEach
+                ignored.add("$packageName|$requestId")
+            }
+        return ignored
     }
 
     private fun parseIsoMillis(value: String?): Long? {

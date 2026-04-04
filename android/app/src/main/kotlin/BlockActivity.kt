@@ -33,10 +33,14 @@ class BlockActivity : Activity() {
     private val pendingUnlockRequestsKey = "flutter.pending_unlock_requests_csv"
     private val friendNameKey = "flutter.friendName"
     private val friendEmailKey = "flutter.friendEmail"
+    private val friendWhatsappE164Key = "flutter.friendWhatsappE164"
+    private val notificationModeKey = "flutter.notificationMode"
     private val requesterNameKey = "flutter.requester_name"
     private val installationIdKey = "flutter.installation_id"
     private val defaultUnlockMinutes = 60
     private val defaultRequesterName = "Usuario"
+    private val defaultNotificationMode = "email_only"
+    private val notificationModeWhatsappOnly = "whatsapp_only"
     private val unlockRequestsEndpoint =
         "https://oggqvcjtvfgyagaisvmj.functions.supabase.co/unlock-requests"
 
@@ -265,10 +269,17 @@ class BlockActivity : Activity() {
         val prefs = applicationContext.getSharedPreferences(prefsFileName, MODE_PRIVATE)
         val friendName = prefs.getString(friendNameKey, "")?.trim().orEmpty()
         val friendEmail = prefs.getString(friendEmailKey, "")?.trim().orEmpty()
+        val friendWhatsappE164 = prefs.getString(friendWhatsappE164Key, "")?.trim().orEmpty()
+        val notificationMode =
+            prefs.getString(notificationModeKey, defaultNotificationMode)?.trim().orEmpty()
         val requesterName = prefs.getString(requesterNameKey, "")?.trim().orEmpty()
 
-        if (friendEmail.isBlank()) {
+        if (notificationMode != notificationModeWhatsappOnly && friendEmail.isBlank()) {
             onFailure("sin email de amigo responsable")
+            return
+        }
+        if (notificationMode == notificationModeWhatsappOnly && friendWhatsappE164.isBlank()) {
+            onFailure("falta WhatsApp del amigo responsable")
             return
         }
 
@@ -286,7 +297,13 @@ class BlockActivity : Activity() {
             put("appName", safeAppName)
             put("requesterName", safeRequesterName)
             put("friendName", safeFriendName)
-            put("friendEmail", friendEmail)
+            if (friendEmail.isNotBlank()) {
+                put("friendEmail", friendEmail)
+            }
+            put("notificationMode", if (notificationMode.isBlank()) defaultNotificationMode else notificationMode)
+            if (friendWhatsappE164.isNotBlank()) {
+                put("friendWhatsappE164", friendWhatsappE164)
+            }
             put("minutes", defaultUnlockMinutes)
             put("v", 1)
         }

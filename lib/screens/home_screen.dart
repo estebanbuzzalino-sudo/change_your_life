@@ -97,8 +97,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   static const String _temporaryUnlockedKey = 'temporary_unlocked_packages_csv';
   static const String _pendingRequestsKey = 'pending_unlock_requests_csv';
   static const String _approvedRequestIdsKey = 'approved_unlock_request_ids_csv';
+  static const String _ignoredUnlockGrantsKey = 'ignored_unlock_grants_csv';
   static const String _replacementChoicesKey = 'replacement_choices';
   static const String _requesterNameKey = 'requester_name';
+  static const String _friendWhatsappE164Key = 'friendWhatsappE164';
+  static const String _notificationModeKey = 'notificationMode';
+  static const String _notificationEmailOnly = 'email_only';
+  static const String _notificationWhatsappOnly = 'whatsapp_only';
   static const int _defaultDeepLinkUnlockMinutes = 60;
   static const List<_PopularBlockAppOption> _popularBlockApps = [
     _PopularBlockAppOption(
@@ -290,8 +295,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final List<Map<String, String>> selectedApps = [];
   final Set<String> _selectedReplacementIds = {};
   final Set<String> _installedAppPackages = {};
+  String? requesterName;
   String? friendName;
   String? friendEmail;
+  String? friendWhatsappE164;
+  String _notificationMode = _notificationEmailOnly;
 
   bool isLoading = true;
   List<AppBlock> activeBlocks = [];
@@ -353,6 +361,60 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final decodedBlocks = savedBlocks
         .map((item) => AppBlock.fromMap(jsonDecode(item)))
         .toList();
+    final now = DateTime.now();
+    final activeBlockedPackages = decodedBlocks
+        .where(
+          (block) =>
+              block.packageName.trim().isNotEmpty && block.endDate.isAfter(now),
+        )
+        .map((block) => block.packageName.trim())
+        .toSet();
+    final activeBlockedSelectedApps = decodedBlocks
+        .where(
+          (block) =>
+              block.packageName.trim().isNotEmpty && block.endDate.isAfter(now),
+        )
+        .map((block) {
+          final packageName = block.packageName.trim();
+          final appName = block.appName.trim().isNotEmpty
+              ? block.appName.trim()
+              : packageName;
+          return <String, String>{
+            'packageName': packageName,
+            'appName': appName,
+          };
+        })
+        .toList();
+    final additionalDecodedApps = decodedApps.where((app) {
+      final packageName = (app['packageName'] ?? '').trim();
+      if (packageName.isEmpty) return false;
+      return !activeBlockedPackages.contains(packageName);
+    }).toList();
+    final selectedByPackage = <String, Map<String, String>>{};
+    for (final app in activeBlockedSelectedApps) {
+      final packageName = (app['packageName'] ?? '').trim();
+      if (packageName.isEmpty) continue;
+      selectedByPackage[packageName] = app;
+    }
+    for (final app in additionalDecodedApps) {
+      final packageName = (app['packageName'] ?? '').trim();
+      if (packageName.isEmpty) continue;
+      selectedByPackage[packageName] = {
+        'packageName': packageName,
+        'appName': (app['appName'] ?? '').trim().isNotEmpty
+            ? (app['appName'] ?? '').trim()
+            : packageName,
+      };
+    }
+    final normalizedSelectedApps = selectedByPackage.values.toList();
+    final normalizedNeedsSave = normalizedSelectedApps.length != decodedApps.length ||
+        additionalDecodedApps.length != decodedApps.length;
+    if (normalizedNeedsSave) {
+      await prefs.setStringList(
+        'selectedApps',
+        normalizedSelectedApps.map((app) => jsonEncode(app)).toList(),
+      );
+    }
     final savedDurationType = prefs.getString('durationType');
     final normalizedDurationType = _normalizeDurationType(savedDurationType);
     final savedDurationValue = prefs.getDouble('durationValue') ?? 7;
@@ -367,10 +429,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
       selectedApps
         ..clear()
-        ..addAll(decodedApps);
+        ..addAll(normalizedSelectedApps);
 
+      requesterName = prefs.getString(_requesterNameKey);
       friendName = prefs.getString('friendName');
       friendEmail = prefs.getString('friendEmail');
+      friendWhatsappE164 = prefs.getString(_friendWhatsappE164Key);
+      final savedNotificationMode = prefs.getString(_notificationModeKey);
+      _notificationMode = savedNotificationMode == _notificationWhatsappOnly
+          ? _notificationWhatsappOnly
+          : _notificationEmailOnly;
       _selectedReplacementIds
         ..clear()
         ..addAll(savedReplacementIds);
@@ -784,10 +852,47 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return selectedApps.any((app) => app['packageName'] == packageName);
   }
 
+  AppBlock? _activeBlockForPackage(String packageName) {
+    final normalizedPackage = packageName.trim();
+    if (normalizedPackage.isEmpty) return null;
+    final now = DateTime.now();
+
+    AppBlock? latest;
+    for (final block in activeBlocks) {
+      if (block.packageName.trim() != normalizedPackage) continue;
+      if (!block.endDate.isAfter(now)) continue;
+      if (latest == null || block.endDate.isAfter(latest.endDate)) {
+        latest = block;
+      }
+    }
+    return latest;
+  }
+
+  bool _isPackageAlreadyBlocked(String packageName) {
+    return _activeBlockForPackage(packageName) != null;
+  }
+
   bool get _hasFriendConfigured {
     final name = (friendName ?? '').trim();
+    if (name.isEmpty) return false;
+    if (_requiresWhatsappChannel) return _hasValidWhatsappForMode;
     final email = (friendEmail ?? '').trim();
-    return name.isNotEmpty && email.isNotEmpty;
+    return email.isNotEmpty;
+  }
+
+  bool get _hasRequesterConfigured => (requesterName ?? '').trim().isNotEmpty;
+
+  bool get _requiresWhatsappChannel =>
+      _notificationMode == _notificationWhatsappOnly;
+
+  bool _isValidE164(String value) {
+    return RegExp(r'^\+[1-9][0-9]{7,14}$').hasMatch(value);
+  }
+
+  bool get _hasValidWhatsappForMode {
+    if (!_requiresWhatsappChannel) return true;
+    final whatsapp = (friendWhatsappE164 ?? '').trim();
+    return _isValidE164(whatsapp);
   }
 
   bool get _hasSelectedAppsActiveBlock {
@@ -812,7 +917,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   bool get _isStep1Ready => selectedApps.isNotEmpty;
-  bool get _isStep2Ready => selectedValue >= 1 && _hasFriendConfigured;
+  bool get _isStep2Ready =>
+      selectedValue >= 1 && _hasRequesterConfigured && _hasFriendConfigured;
   bool get _isStep3Ready => true;
 
   bool _isStepReady(int index) {
@@ -916,12 +1022,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _showMessage('Confirma y activa el bloqueo para pasar al siguiente paso.');
         return;
       }
+      if (_requiresWhatsappChannel && !_hasValidWhatsappForMode) {
+        _showMessage(
+          'Para usar WhatsApp, completa el numero del amigo en formato +5491112345678.',
+        );
+        return;
+      }
+      if (!_hasRequesterConfigured) {
+        _showMessage('Completa el campo Solicitante para continuar.');
+        return;
+      }
       _showMessage('Defini duracion y amigo responsable para continuar.');
       return;
     }
   }
 
   Future<void> _togglePopularBlockApp(_PopularBlockAppOption option) async {
+    if (_isPackageAlreadyBlocked(option.packageName)) {
+      final appName = _displayNameForPackage(option.packageName);
+      _showMessage('$appName ya esta bloqueada.');
+      return;
+    }
+
     final selectedIndex = selectedApps.indexWhere(
       (app) => app['packageName'] == option.packageName,
     );
@@ -1132,8 +1254,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       'selectedApps',
       selectedApps.map((app) => jsonEncode(app)).toList(),
     );
+    await prefs.setString(_requesterNameKey, requesterName ?? '');
     await prefs.setString('friendName', friendName ?? '');
     await prefs.setString('friendEmail', friendEmail ?? '');
+    await prefs.setString(_friendWhatsappE164Key, friendWhatsappE164 ?? '');
+    await prefs.setString(_notificationModeKey, _notificationMode);
   }
 
   Future<void> _saveBlocks() async {
@@ -1162,16 +1287,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       context,
       MaterialPageRoute(
         builder: (_) => FriendScreen(
+          initialRequesterName: requesterName,
           initialName: friendName,
           initialEmail: friendEmail,
+          initialWhatsappE164: friendWhatsappE164,
         ),
       ),
     );
 
     if (result != null) {
       setState(() {
+        requesterName = result['requesterName'];
         friendName = result['name'];
         friendEmail = result['email'];
+        friendWhatsappE164 = result['whatsappE164'];
       });
       await _saveData();
     }
@@ -1301,7 +1430,30 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _loadPendingRequests() async {
     final prefs = await SharedPreferences.getInstance();
     final csv = prefs.getString(_pendingRequestsKey) ?? '';
-    final loaded = _parsePendingRequestsCsv(csv).values.toList()
+    final pendingByPackage = _parsePendingRequestsCsv(csv);
+
+    // Si una app ya tiene desbloqueo temporal activo, esa solicitud deja de estar pendiente.
+    final temporaryCsv = prefs.getString(_temporaryUnlockedKey) ?? '';
+    final temporaryByPackage = _parseTemporaryUnlockedCsv(temporaryCsv);
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final pendingKeys = pendingByPackage.keys.toList();
+    var removedResolved = false;
+    for (final packageName in pendingKeys) {
+      final unlockUntil = temporaryByPackage[packageName];
+      if (unlockUntil != null && unlockUntil > now) {
+        pendingByPackage.remove(packageName);
+        removedResolved = true;
+      }
+    }
+
+    if (removedResolved) {
+      await prefs.setString(
+        _pendingRequestsKey,
+        _serializePendingRequestsCsv(pendingByPackage),
+      );
+    }
+
+    final loaded = pendingByPackage.values.toList()
       ..sort(
         (a, b) => (b.requestedAtMillis ?? 0).compareTo(a.requestedAtMillis ?? 0),
       );
@@ -1352,29 +1504,34 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return;
     }
 
-    if (friendName == null ||
-        friendName!.isEmpty ||
-        friendEmail == null ||
-        friendEmail!.isEmpty) {
+    final safeFriendName = (friendName ?? '').trim();
+    final safeFriendEmail = (friendEmail ?? '').trim();
+
+    if (safeFriendName.isEmpty) {
       _showMessage('Primero elegi un amigo responsable.');
       return;
     }
 
-    final now = DateTime.now();
-
-    for (final app in selectedApps) {
-      final packageName = app['packageName'] ?? '';
-      final appName = app['appName'] ?? 'App sin nombre';
-
-      final alreadyBlocked = activeBlocks.any(
-        (block) => block.packageName == packageName,
+    if (_requiresWhatsappChannel && !_hasValidWhatsappForMode) {
+      _showMessage(
+        'Para usar WhatsApp, completa el numero del amigo en formato +5491112345678.',
       );
+      return;
+    }
 
-      if (alreadyBlocked) {
-        continue;
-      }
+    if (!_requiresWhatsappChannel && safeFriendEmail.isEmpty) {
+      _showMessage('Para usar email, completa el email del amigo responsable.');
+      return;
+    }
 
-      final endDate = selectedDurationType == _durationDays
+    final now = DateTime.now();
+    final selectedPackageSet = selectedApps
+        .map((app) => (app['packageName'] ?? '').trim())
+        .where((packageName) => packageName.isNotEmpty)
+        .toSet();
+
+    DateTime calculateEndDate() {
+      return selectedDurationType == _durationDays
           ? now.add(Duration(days: selectedValue.round()))
           : DateTime(
               now.year,
@@ -1384,23 +1541,99 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               now.minute,
               now.second,
             );
+    }
 
-      activeBlocks.add(
-        AppBlock(
-          appName: appName,
-          packageName: packageName,
-          durationType: selectedDurationType,
-          durationValue: selectedValue.round(),
-          friendName: friendName!,
-          friendEmail: friendEmail!,
-          startDate: now,
-          endDate: endDate,
-        ),
+    for (final app in selectedApps) {
+      final packageName = app['packageName'] ?? '';
+      final appName = app['appName'] ?? 'App sin nombre';
+      final endDate = calculateEndDate();
+
+      final existingIndex = activeBlocks.indexWhere(
+        (block) => block.packageName == packageName,
+      );
+
+      final updatedBlock = AppBlock(
+        appName: appName,
+        packageName: packageName,
+        durationType: selectedDurationType,
+        durationValue: selectedValue.round(),
+        friendName: safeFriendName,
+        friendEmail: safeFriendEmail,
+        startDate: now,
+        endDate: endDate,
+      );
+
+      if (existingIndex >= 0) {
+        activeBlocks[existingIndex] = updatedBlock;
+        continue;
+      }
+
+      activeBlocks.add(updatedBlock);
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final ignoredGrantKeys = _parseCsvSet(
+      prefs.getString(_ignoredUnlockGrantsKey) ?? '',
+    );
+
+    for (final packageName in selectedPackageSet) {
+      final matchingGrant = _lastSyncActiveGrants
+          .where((grant) => grant.packageName == packageName)
+          .fold<UnlockGrantActiveGrant?>(null, (latest, current) {
+        if (latest == null) return current;
+        return current.unlockUntilMillis > latest.unlockUntilMillis ? current : latest;
+      });
+
+      final grantRequestId = matchingGrant?.requestId?.trim();
+      if (grantRequestId != null && grantRequestId.isNotEmpty) {
+        ignoredGrantKeys.add('$packageName|$grantRequestId');
+      }
+    }
+    await prefs.setString(
+      _ignoredUnlockGrantsKey,
+      _serializeCsvSet(ignoredGrantKeys),
+    );
+
+    final temporaryByPackage = _parseTemporaryUnlockedCsv(
+      prefs.getString(_temporaryUnlockedKey) ?? '',
+    );
+    final temporaryKeys = temporaryByPackage.keys.toList();
+    var removedTemporaryUnlocks = false;
+    for (final packageName in temporaryKeys) {
+      if (selectedPackageSet.contains(packageName)) {
+        temporaryByPackage.remove(packageName);
+        removedTemporaryUnlocks = true;
+      }
+    }
+    if (removedTemporaryUnlocks) {
+      await prefs.setString(
+        _temporaryUnlockedKey,
+        _serializeTemporaryUnlockedCsv(temporaryByPackage),
+      );
+    }
+
+    final pendingByPackage = _parsePendingRequestsCsv(
+      prefs.getString(_pendingRequestsKey) ?? '',
+    );
+    final pendingKeys = pendingByPackage.keys.toList();
+    var removedPendingRequests = false;
+    for (final packageName in pendingKeys) {
+      if (selectedPackageSet.contains(packageName)) {
+        pendingByPackage.remove(packageName);
+        removedPendingRequests = true;
+      }
+    }
+    if (removedPendingRequests) {
+      await prefs.setString(
+        _pendingRequestsKey,
+        _serializePendingRequestsCsv(pendingByPackage),
       );
     }
 
     await _saveBlocks();
     await _saveBlockedPackagesForAndroid();
+    await _loadTemporaryUnlockedApps();
+    await _loadPendingRequests();
 
     if (!mounted) return;
 
@@ -1422,12 +1655,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     await prefs.remove('durationType');
     await prefs.remove('durationValue');
     await prefs.remove('selectedApps');
+    await prefs.remove(_requesterNameKey);
     await prefs.remove('friendName');
     await prefs.remove('friendEmail');
+    await prefs.remove(_friendWhatsappE164Key);
+    await prefs.remove(_notificationModeKey);
     await prefs.remove('activeBlocks');
     await prefs.remove('blocked_packages_csv');
     await prefs.remove('pending_unlock_requests_csv');
     await prefs.remove('temporary_unlocked_packages_csv');
+    await prefs.remove(_ignoredUnlockGrantsKey);
     await prefs.remove(_replacementChoicesKey);
     await prefs.remove(_approvedRequestIdsKey);
   }
@@ -1441,8 +1678,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _currentWizardIndex = 0;
       selectedApps.clear();
       _selectedReplacementIds.clear();
+      requesterName = null;
       friendName = null;
       friendEmail = null;
+      friendWhatsappE164 = null;
+      _notificationMode = _notificationEmailOnly;
       activeBlocks.clear();
       temporaryUnlockedApps.clear();
       _appNameCache.clear();
@@ -1494,10 +1734,46 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         .where((packageName) => packageName.isNotEmpty)
         .toSet();
     final now = DateTime.now();
+    if (selectedPackages.isEmpty) {
+      return activeBlocks.where((block) => block.endDate.isAfter(now)).toList();
+    }
     return activeBlocks.where((block) {
       return selectedPackages.contains(block.packageName) &&
           block.endDate.isAfter(now);
     }).toList();
+  }
+
+  List<_TemporaryUnlockInfo> _selectedActiveTemporaryUnlocks() {
+    final selectedPackages = selectedApps
+        .map((app) => (app['packageName'] ?? '').trim())
+        .where((packageName) => packageName.isNotEmpty)
+        .toSet();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (selectedPackages.isEmpty) {
+      return temporaryUnlockedApps
+          .where((unlock) => unlock.unlockedUntilMillis > now)
+          .toList();
+    }
+    return temporaryUnlockedApps.where((unlock) {
+      return selectedPackages.contains(unlock.packageName) &&
+          unlock.unlockedUntilMillis > now;
+    }).toList();
+  }
+
+  _TemporaryUnlockInfo? _activeTemporaryUnlockForPackage(String packageName) {
+    final normalizedPackage = packageName.trim();
+    if (normalizedPackage.isEmpty) return null;
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    _TemporaryUnlockInfo? latest;
+    for (final unlock in temporaryUnlockedApps) {
+      if (unlock.packageName != normalizedPackage) continue;
+      if (unlock.unlockedUntilMillis <= now) continue;
+      if (latest == null || unlock.unlockedUntilMillis > latest.unlockedUntilMillis) {
+        latest = unlock;
+      }
+    }
+    return latest;
   }
 
   String _remainingTimeFrom(DateTime endDate) {
@@ -1514,6 +1790,70 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
     final minutes = diff.inMinutes <= 0 ? 1 : diff.inMinutes;
     return '${minutes}m';
+  }
+
+  DateTime _addMonthsKeepingClock(DateTime base, int monthsToAdd) {
+    final monthIndex = base.month - 1 + monthsToAdd;
+    final targetYear = base.year + (monthIndex ~/ 12);
+    final targetMonth = (monthIndex % 12) + 1;
+    final maxDay = DateTime(targetYear, targetMonth + 1, 0).day;
+    final targetDay = base.day > maxDay ? maxDay : base.day;
+    return DateTime(
+      targetYear,
+      targetMonth,
+      targetDay,
+      base.hour,
+      base.minute,
+      base.second,
+      base.millisecond,
+      base.microsecond,
+    );
+  }
+
+  String _remainingBlockTimeFrom(DateTime endDate) {
+    final now = DateTime.now();
+    if (!endDate.isAfter(now)) return 'Finalizado';
+
+    var cursor = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      now.hour,
+      now.minute,
+      now.second,
+      now.millisecond,
+      now.microsecond,
+    );
+    var months = 0;
+
+    while (months < 2400) {
+      final next = _addMonthsKeepingClock(cursor, 1);
+      if (next.isAfter(endDate)) break;
+      months += 1;
+      cursor = next;
+    }
+
+    final remainder = endDate.difference(cursor);
+    final days = remainder.inDays;
+    final hours = remainder.inHours.remainder(24);
+
+    final parts = <String>[];
+    if (months > 0) {
+      parts.add(months == 1 ? '1 mes' : '$months meses');
+    }
+    if (days > 0 || months > 0) {
+      parts.add('${days}d');
+    }
+    if (hours > 0 || days > 0 || months > 0) {
+      parts.add('${hours}h');
+    }
+
+    if (parts.isEmpty) {
+      final minutes = remainder.inMinutes <= 0 ? 1 : remainder.inMinutes;
+      return '${minutes}m';
+    }
+
+    return parts.join(' ');
   }
 
   Widget _buildSectionHeader({
@@ -1592,16 +1932,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ..._popularBlockApps.map((option) {
               final isSelected = _isAppSelected(option.packageName);
               final isAvailable = _isPopularAppAvailable(option);
+              final activeBlock = _activeBlockForPackage(option.packageName);
+              final isAlreadyBlocked = activeBlock != null;
+              final blockedSubtitle = isAlreadyBlocked
+                  ? 'Ya bloqueada (${_remainingBlockTimeFrom(activeBlock!.endDate)})'
+                  : '';
               return Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: SelectableOptionCard(
                   title: option.appName,
-                  subtitle: isAvailable
-                      ? 'Disponible en este dispositivo'
-                      : 'No instalada en este dispositivo',
+                  subtitle: isAlreadyBlocked
+                      ? blockedSubtitle
+                      : (isAvailable
+                            ? 'Disponible en este dispositivo'
+                            : 'No instalada en este dispositivo'),
                   icon: option.icon,
                   selected: isSelected,
-                  enabled: isAvailable || isSelected,
+                  enabled: !isAlreadyBlocked && (isAvailable || isSelected),
                   onTap: () => _togglePopularBlockApp(option),
                 ),
               );
@@ -1738,8 +2085,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         style: TextStyle(fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 6),
+                      Text('Solicitante: ${requesterName ?? ''}'),
                       Text('Nombre: ${friendName ?? ''}'),
                       Text('Email: ${friendEmail ?? ''}'),
+                      if ((friendWhatsappE164 ?? '').trim().isNotEmpty)
+                        Text('WhatsApp: ${friendWhatsappE164 ?? ''}'),
                     ],
                   ),
                 ),
@@ -1751,18 +2101,63 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             const SizedBox(height: 10),
             Card(
-              color: Colors.blueGrey.shade50,
-              child: const Padding(
-                padding: EdgeInsets.all(12),
-                child: Row(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.chat_bubble_outline_rounded),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'WhatsApp (proximamente): dejamos la interfaz lista sin cambiar la logica actual.',
-                      ),
+                    const Text(
+                      'Canal de solicitud',
+                      style: TextStyle(fontWeight: FontWeight.w700),
                     ),
+                    const SizedBox(height: 10),
+                    SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment<String>(
+                          value: _notificationEmailOnly,
+                          label: Text('Solo email'),
+                          icon: Icon(Icons.email_outlined),
+                        ),
+                        ButtonSegment<String>(
+                          value: _notificationWhatsappOnly,
+                          label: Text('Solo WhatsApp'),
+                          icon: Icon(Icons.chat_outlined),
+                        ),
+                      ],
+                      selected: {_notificationMode},
+                      onSelectionChanged: (newSelection) async {
+                        setState(() {
+                          _notificationMode = newSelection.first;
+                        });
+                        await _saveData();
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _requiresWhatsappChannel
+                          ? 'Se envia por WhatsApp automaticamente.'
+                          : 'Se envia por email automaticamente.',
+                      style: const TextStyle(color: Colors.black54),
+                    ),
+                    if (_requiresWhatsappChannel) ...[
+                      const SizedBox(height: 8),
+                      if (_hasValidWhatsappForMode)
+                        Text(
+                          'WhatsApp configurado: ${friendWhatsappE164 ?? ''}',
+                          style: const TextStyle(
+                            color: Color(0xFF1E7B3A),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        )
+                      else
+                        const Text(
+                          'Falta WhatsApp valido del amigo (formato +5491112345678). Editalo en \"Elegir amigo responsable\".',
+                          style: TextStyle(
+                            color: Color(0xFFB3261E),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                    ],
                   ],
                 ),
               ),
@@ -1846,17 +2241,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Widget _buildSummaryStep() {
     final selectedActiveBlocks = _selectedActiveBlocks();
+    final selectedTemporaryUnlocks = _selectedActiveTemporaryUnlocks();
     final isBlockingActive = _hasSelectedAppsActiveBlock;
     final selectedReplacementOptions = _selectedReplacementOptions;
     String remainingOverview = 'Aun no hay un bloqueo activo para las apps elegidas.';
-    if (selectedActiveBlocks.isNotEmpty) {
+    if (selectedTemporaryUnlocks.isNotEmpty) {
+      final unlockCount = selectedTemporaryUnlocks.length;
+      if (unlockCount == 1) {
+        final unlock = selectedTemporaryUnlocks.first;
+        final appName = _displayNameForPackage(unlock.packageName);
+        final label = _temporaryUnlockLabel(unlock);
+        remainingOverview = 'Desbloqueo temporal activo para $appName ($label).';
+      } else {
+        remainingOverview = 'Hay $unlockCount apps con desbloqueo temporal activo.';
+      }
+    } else if (selectedActiveBlocks.isNotEmpty) {
       DateTime nearestEnd = selectedActiveBlocks.first.endDate;
       for (final block in selectedActiveBlocks) {
         if (block.endDate.isBefore(nearestEnd)) {
           nearestEnd = block.endDate;
         }
       }
-      remainingOverview = 'Tiempo restante aproximado: ${_remainingTimeFrom(nearestEnd)}';
+      remainingOverview = 'Tiempo restante aproximado: ${_remainingBlockTimeFrom(nearestEnd)}';
     }
 
     return SingleChildScrollView(
@@ -1926,16 +2332,43 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         Expanded(
                           child: Text(
                             _hasFriendConfigured
-                                ? 'Amigo responsable: ${friendName ?? ''} - ${friendEmail ?? ''}'
-                                : 'Amigo responsable: no definido',
+                                ? 'Solicitante: ${requesterName ?? ''}\nAmigo responsable: ${friendName ?? ''} - ${friendEmail ?? ''}'
+                                : 'Solicitante: ${requesterName ?? ''}\nAmigo responsable: no definido',
                           ),
                         ),
                       ],
                     ),
+                    if (_notificationMode == _notificationWhatsappOnly) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(Icons.chat_outlined, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              (friendWhatsappE164 ?? '').trim().isEmpty
+                                  ? 'Canal: Solo WhatsApp'
+                                  : 'Canal: Solo WhatsApp (${friendWhatsappE164 ?? ''})',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ] else ...[
+                      const SizedBox(height: 4),
+                      const Row(
+                        children: [
+                          Icon(Icons.email_outlined, size: 18),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text('Canal: Solo email'),
+                          ),
+                        ],
+                      ),
+                    ],
                     if (selectedActiveBlocks.isNotEmpty) ...[
                       const Divider(height: 22),
                       const Text(
-                        'Tiempo por app bloqueada',
+                        'Estado por app',
                         style: TextStyle(fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 8),
@@ -1943,15 +2376,50 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         final appName = block.appName.trim().isNotEmpty
                             ? block.appName.trim()
                             : _displayNameForPackage(block.packageName);
+                        final activeTemporaryUnlock = _activeTemporaryUnlockForPackage(
+                          block.packageName,
+                        );
+                        final isTemporarilyUnlocked = activeTemporaryUnlock != null;
+                        final timeLabel = isTemporarilyUnlocked
+                            ? (_isPermanentUnlock(activeTemporaryUnlock!)
+                                  ? 'Desbloqueada'
+                                  : _temporaryUnlockLabel(activeTemporaryUnlock!))
+                            : _remainingBlockTimeFrom(block.endDate);
+                        final statusLabel = isTemporarilyUnlocked
+                            ? 'Desbloqueada temporalmente'
+                            : 'Bloqueada';
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 6),
                           child: Row(
                             children: [
-                              const Icon(Icons.lock_clock_rounded, size: 18),
+                              Icon(
+                                isTemporarilyUnlocked
+                                    ? Icons.lock_open_rounded
+                                    : Icons.lock_clock_rounded,
+                                size: 18,
+                                color: isTemporarilyUnlocked ? Colors.teal.shade700 : null,
+                              ),
                               const SizedBox(width: 8),
-                              Expanded(child: Text(appName)),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(appName),
+                                    Text(
+                                      statusLabel,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: isTemporarilyUnlocked
+                                            ? Colors.teal.shade700
+                                            : Colors.black54,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                               Text(
-                                _remainingTimeFrom(block.endDate),
+                                timeLabel,
                                 style: const TextStyle(fontWeight: FontWeight.w600),
                               ),
                             ],

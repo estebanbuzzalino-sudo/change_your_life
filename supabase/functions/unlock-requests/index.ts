@@ -9,9 +9,9 @@ const corsHeaders = {
 
 const DEFAULT_UNLOCK_MINUTES = 60;
 const E164_REGEX = /^\+[1-9][0-9]{7,14}$/;
-const NOTIFICATION_MODES = new Set(["email_only", "email_and_whatsapp"]);
+const NOTIFICATION_MODES = new Set(["email_only", "whatsapp_only", "email_and_whatsapp"]);
 
-type NotificationMode = "email_only" | "email_and_whatsapp";
+type NotificationMode = "email_only" | "whatsapp_only" | "email_and_whatsapp";
 type NotificationChannel = "email" | "whatsapp";
 type NotificationStatus = "queued" | "sent" | "failed" | "skipped";
 
@@ -287,19 +287,31 @@ serve(async (req) => {
         ok: false,
         error: {
           code: "VALIDATION_ERROR",
-          message: "notificationMode must be email_only or email_and_whatsapp",
+          message: "notificationMode must be email_only, whatsapp_only or email_and_whatsapp",
           details: {},
         },
         meta: { requestId: requestIdMeta, serverTime },
       });
     }
 
-    if (!packageName || !appName || !friendEmail) {
+    if (!packageName || !appName) {
       return jsonResponse(422, {
         ok: false,
         error: {
           code: "VALIDATION_ERROR",
-          message: "packageName, appName and friendEmail are required",
+          message: "packageName and appName are required",
+          details: {},
+        },
+        meta: { requestId: requestIdMeta, serverTime },
+      });
+    }
+
+    if (notificationMode === "email_only" && friendEmail.length === 0) {
+      return jsonResponse(422, {
+        ok: false,
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "friendEmail is required when notificationMode is email_only",
           details: {},
         },
         meta: { requestId: requestIdMeta, serverTime },
@@ -318,12 +330,27 @@ serve(async (req) => {
       });
     }
 
-    if (notificationMode === "email_and_whatsapp" && friendWhatsappE164.length === 0) {
+    if (notificationMode === "whatsapp_only" && friendWhatsappE164.length === 0) {
       return jsonResponse(422, {
         ok: false,
         error: {
           code: "VALIDATION_ERROR",
-          message: "friend_whatsapp_e164 is required when notificationMode is email_and_whatsapp",
+          message: "friend_whatsapp_e164 is required when notificationMode is whatsapp_only",
+          details: {},
+        },
+        meta: { requestId: requestIdMeta, serverTime },
+      });
+    }
+
+    if (
+      notificationMode === "email_and_whatsapp" &&
+      (friendWhatsappE164.length === 0 || friendEmail.length === 0)
+    ) {
+      return jsonResponse(422, {
+        ok: false,
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "friendEmail and friend_whatsapp_e164 are required when notificationMode is email_and_whatsapp",
           details: {},
         },
         meta: { requestId: requestIdMeta, serverTime },
@@ -432,71 +459,95 @@ serve(async (req) => {
       <p>${approvalLink}</p>
     `;
 
-    const emailSubject = `Solicitud de desbloqueo temporal (${minutes} min) - ${appName}`;
-    const emailPayload = {
-      subject: emailSubject,
-      from: fromEmail,
-      to: friendEmail,
-      minutes,
-      appName,
-      requesterName,
-      friendName,
-      requestedAt: requestedAt.toISOString(),
-      notificationMode,
-    };
-    await createNotificationRecord(supabase, {
-      requestId,
-      channel: "email",
-      provider: "resend",
-      target: friendEmail,
-      status: "queued",
-      payload: emailPayload,
-    });
+    const shouldSendEmail = notificationMode !== "whatsapp_only";
+    const shouldAttemptWhatsapp = notificationMode !== "email_only";
+    let emailSent = false;
 
-    const resendResponse = await sendEmailViaResend({
-      resendApiKey,
-      fromEmail,
-      friendEmail,
-      subject: emailSubject,
-      html: emailHtml,
-    });
-
-    if (!resendResponse.ok) {
+    if (shouldSendEmail) {
+      const emailSubject = `Solicitud de desbloqueo temporal (${minutes} min) - ${appName}`;
+      const emailPayload = {
+        subject: emailSubject,
+        from: fromEmail,
+        to: friendEmail,
+        minutes,
+        appName,
+        requesterName,
+        friendName,
+        requestedAt: requestedAt.toISOString(),
+        notificationMode,
+      };
       await createNotificationRecord(supabase, {
         requestId,
         channel: "email",
         provider: "resend",
         target: friendEmail,
-        status: "failed",
-        providerMessageId: resendResponse.providerMessageId,
-        providerStatus: resendResponse.providerStatus,
-        errorCode: `http_${resendResponse.status}`,
-        errorMessage: resendResponse.text,
+        status: "queued",
         payload: emailPayload,
       });
-      return jsonResponse(503, {
-        ok: false,
-        error: {
-          code: "EMAIL_DELIVERY_FAILED",
-          message: resendResponse.text,
-          details: {},
+
+      const resendResponse = await sendEmailViaResend({
+        resendApiKey,
+        fromEmail,
+        friendEmail,
+        subject: emailSubject,
+        html: emailHtml,
+      });
+
+      if (!resendResponse.ok) {
+        await createNotificationRecord(supabase, {
+          requestId,
+          channel: "email",
+          provider: "resend",
+          target: friendEmail,
+          status: "failed",
+          providerMessageId: resendResponse.providerMessageId,
+          providerStatus: resendResponse.providerStatus,
+          errorCode: `http_${resendResponse.status}`,
+          errorMessage: resendResponse.text,
+          payload: emailPayload,
+        });
+        return jsonResponse(503, {
+          ok: false,
+          error: {
+            code: "EMAIL_DELIVERY_FAILED",
+            message: resendResponse.text,
+            details: {},
+          },
+          meta: { requestId: requestIdMeta, serverTime },
+        });
+      }
+
+      await createNotificationRecord(supabase, {
+        requestId,
+        channel: "email",
+        provider: "resend",
+        target: friendEmail,
+        status: "sent",
+        providerMessageId: resendResponse.providerMessageId,
+        providerStatus: resendResponse.providerStatus,
+        payload: emailPayload,
+      });
+      emailSent = true;
+    } else {
+      await createNotificationRecord(supabase, {
+        requestId,
+        channel: "email",
+        provider: "resend",
+        target: friendEmail || "not_configured",
+        status: "skipped",
+        errorCode: "CHANNEL_DISABLED",
+        errorMessage: "notificationMode=whatsapp_only",
+        payload: {
+          appName,
+          requesterName,
+          friendName,
+          requestedAt: requestedAt.toISOString(),
+          minutes,
+          notificationMode,
         },
-        meta: { requestId: requestIdMeta, serverTime },
       });
     }
 
-    await createNotificationRecord(supabase, {
-      requestId,
-      channel: "email",
-      provider: "resend",
-      target: friendEmail,
-      status: "sent",
-      providerMessageId: resendResponse.providerMessageId,
-      providerStatus: resendResponse.providerStatus,
-      payload: emailPayload,
-    });
-
-    const shouldAttemptWhatsapp = notificationMode === "email_and_whatsapp";
     let whatsappSent = false;
     let whatsappError: string | null = null;
 
@@ -549,7 +600,6 @@ serve(async (req) => {
           `Solicitud de desbloqueo temporal\n` +
           `App bloqueada: ${appName}\n` +
           `Solicitante: ${requesterName}\n` +
-          `Duracion solicitada: ${minutes} minutos\n` +
           `Aprobar desbloqueo: ${approvalLink}`;
 
         const twilioResponse = await sendWhatsappViaTwilio({
@@ -600,7 +650,7 @@ serve(async (req) => {
         minutes,
         requestedAt: requestedAt.toISOString(),
         tokenExpiresAt: tokenExpiresAt.toISOString(),
-        emailSent: true,
+        emailSent,
         notificationMode,
         friendWhatsappE164: friendWhatsappE164 || null,
         whatsappAttempted: shouldAttemptWhatsapp,
