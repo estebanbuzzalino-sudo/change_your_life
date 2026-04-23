@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:usage_stats/usage_stats.dart';
 
 class UsageAccessService {
@@ -7,7 +8,8 @@ class UsageAccessService {
 
     try {
       return await UsageStats.checkUsagePermission() ?? false;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[usage-access] hasPermission error: $e');
       return false;
     }
   }
@@ -63,7 +65,8 @@ class UsageAccessService {
       }
 
       return null;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[usage-access] getCurrentForegroundApp error: $e');
       return null;
     }
   }
