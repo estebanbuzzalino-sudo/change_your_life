@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/app_block.dart';
+import '../services/accessibility_service_status.dart';
 import '../services/unlock_grants_sync_service.dart';
 import 'friend_screen.dart';
 import 'block_screen.dart';
@@ -323,6 +324,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   DateTime? _lastSyncAt;
   bool? _lastSyncOk;
   List<UnlockGrantActiveGrant> _lastSyncActiveGrants = [];
+  final AccessibilityServiceStatus _accessibilityStatus = AccessibilityServiceStatus();
+  bool _accessibilityEnabled = true;
 
   @override
   void initState() {
@@ -331,6 +334,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _loadSavedData();
     _startTemporaryUnlockTimer();
     _setupDeepLinks();
+    _checkAccessibilityServiceStatus();
   }
 
   @override
@@ -346,6 +350,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(_syncRemoteUnlockGrants(trigger: 'app_foreground'));
+      _checkAccessibilityServiceStatus();
+    }
+  }
+
+  Future<void> _checkAccessibilityServiceStatus() async {
+    final enabled = await _accessibilityStatus.isEnabled();
+    if (!mounted) return;
+    if (_accessibilityEnabled != enabled) {
+      setState(() {
+        _accessibilityEnabled = enabled;
+      });
     }
   }
 
@@ -1280,6 +1295,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         .toList();
 
     await prefs.setString('blocked_packages_csv', packages.join(','));
+
+    final endDates = activeBlocks
+        .where((block) => block.packageName.isNotEmpty)
+        .map((block) =>
+            '${block.packageName}|${block.endDate.millisecondsSinceEpoch}')
+        .join(',');
+    await prefs.setString('blocked_end_dates_csv', endDates);
   }
 
   Future<void> _openFriendScreen() async {
@@ -1662,6 +1684,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     await prefs.remove(_notificationModeKey);
     await prefs.remove('activeBlocks');
     await prefs.remove('blocked_packages_csv');
+    await prefs.remove('blocked_end_dates_csv');
     await prefs.remove('pending_unlock_requests_csv');
     await prefs.remove('temporary_unlocked_packages_csv');
     await prefs.remove(_ignoredUnlockGrantsKey);
@@ -2636,6 +2659,37 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  Widget _buildAccessibilityWarningBanner() {
+    return Material(
+      color: Colors.red.shade700,
+      child: InkWell(
+        onTap: () async {
+          await _accessibilityStatus.openSettings();
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: const [
+              Icon(Icons.warning_amber_rounded, color: Colors.white, size: 22),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'El servicio de accesibilidad está desactivado. Las apps no se bloquearán. Tocá aquí para activarlo.',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Icon(Icons.arrow_forward_ios, color: Colors.white, size: 14),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
@@ -2682,20 +2736,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
         ],
       ),
-      body: PageView(
-        controller: _wizardPageController,
-        physics: const NeverScrollableScrollPhysics(),
-        onPageChanged: (index) {
-          if (!mounted) return;
-          setState(() {
-            _currentWizardIndex = index;
-          });
-        },
+      body: Column(
         children: [
-          _buildStepOne(),
-          _buildStepTwo(),
-          _buildStepThree(),
-          _buildSummaryStep(),
+          if (!_accessibilityEnabled) _buildAccessibilityWarningBanner(),
+          Expanded(
+            child: PageView(
+              controller: _wizardPageController,
+              physics: const NeverScrollableScrollPhysics(),
+              onPageChanged: (index) {
+                if (!mounted) return;
+                setState(() {
+                  _currentWizardIndex = index;
+                });
+              },
+              children: [
+                _buildStepOne(),
+                _buildStepTwo(),
+                _buildStepThree(),
+                _buildSummaryStep(),
+              ],
+            ),
+          ),
         ],
       ),
       bottomNavigationBar: SafeArea(

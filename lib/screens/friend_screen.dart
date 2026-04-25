@@ -20,6 +20,7 @@ class FriendScreen extends StatefulWidget {
 
 class _FriendScreenState extends State<FriendScreen> {
   static final RegExp _e164Regex = RegExp(r'^\+[1-9][0-9]{7,14}$');
+  static final RegExp _emailRegex = RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
 
   late final TextEditingController requesterController;
   late final TextEditingController nameController;
@@ -72,6 +73,15 @@ class _FriendScreenState extends State<FriendScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('WhatsApp invalido. Usa formato +5491112345678.'),
+        ),
+      );
+      return;
+    }
+
+    if (email.isNotEmpty && !_emailRegex.hasMatch(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Email invalido. Revisa que tenga formato nombre@dominio.com.'),
         ),
       );
       return;

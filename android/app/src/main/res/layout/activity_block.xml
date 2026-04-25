@@ -31,11 +31,22 @@
         android:id="@+id/blockSubMessage"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="26dp"
+        android:layout_marginBottom="14dp"
         android:gravity="center"
         android:text="Proba leer unos minutos, moverte, respirar o avanzar con algo importante."
         android:textColor="#455A64"
         android:textSize="15sp" />
+
+    <TextView
+        android:id="@+id/blockEndDateText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="22dp"
+        android:gravity="center"
+        android:textColor="#C62828"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
 
     <Button
         android:id="@+id/openReplacementsButton"
