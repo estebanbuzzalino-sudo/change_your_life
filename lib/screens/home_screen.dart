@@ -1724,6 +1724,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           packageName: block.packageName,
           friendName: block.friendName,
           endDate: block.endDate,
+          replacementCategories: _selectedReplacementIds.toList(),
         ),
       ),
     );
@@ -1946,7 +1947,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
       child: WizardStepShell(
-        stepLabel: 'Paso 1 de 3',
+        stepLabel: null,
         title: 'Elegi que apps queres bloquear',
         subtitle: 'Elegi las apps que queres pausar',
         child: Column(
@@ -2032,7 +2033,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
       child: WizardStepShell(
-        stepLabel: 'Paso 2 de 3',
+        stepLabel: null,
         title: 'Elegi el tiempo y el amigo responsable',
         subtitle: 'Defini cuanto tiempo queres bloquearlas',
         child: Column(
@@ -2195,7 +2196,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
       child: WizardStepShell(
-        stepLabel: 'Paso 3 de 3',
+        stepLabel: null,
         title: 'Elegi con que queres reemplazar ese tiempo',
         subtitle: 'Elegi categorias para personalizar tus sugerencias y abrir opciones concretas',
         child: Column(
@@ -2659,6 +2660,86 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  static const List<String> _wizardStepTitles = [
+    'Apps a bloquear',
+    'Tiempo y amigo',
+    'Reemplazos',
+    'Resumen',
+  ];
+
+  Widget _buildWizardProgressBar() {
+    final total = _wizardStepTitles.length;
+    final current = _currentWizardIndex.clamp(0, total - 1);
+    final progress = (current + 1) / total;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: List.generate(total, (i) {
+              final isDone = i < current;
+              final isActive = i == current;
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: isActive ? 10 : 8,
+                    height: isActive ? 10 : 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isDone || isActive
+                          ? Colors.green.shade600
+                          : Colors.grey.shade300,
+                    ),
+                  ),
+                  if (i < total - 1)
+                    Container(
+                      width: 32,
+                      height: 2,
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      color: isDone
+                          ? Colors.green.shade400
+                          : Colors.grey.shade300,
+                    ),
+                ],
+              );
+            }),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                _wizardStepTitles[current],
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.green.shade700,
+                ),
+              ),
+              Text(
+                'Paso ${current + 1} de $total',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+              ),
+            ],
+          ),
+        ),
+        LinearProgressIndicator(
+          value: progress,
+          minHeight: 3,
+          backgroundColor: Colors.grey.shade200,
+          valueColor: AlwaysStoppedAnimation(Colors.green.shade500),
+        ),
+      ],
+    );
+  }
+
   Widget _buildAccessibilityWarningBanner() {
     return Material(
       color: Colors.red.shade700,
@@ -2739,6 +2820,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       body: Column(
         children: [
           if (!_accessibilityEnabled) _buildAccessibilityWarningBanner(),
+          _buildWizardProgressBar(),
           Expanded(
             child: PageView(
               controller: _wizardPageController,

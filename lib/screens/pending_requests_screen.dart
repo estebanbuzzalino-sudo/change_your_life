@@ -287,7 +287,38 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen>
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : pendingRequests.isEmpty
-              ? const Center(child: Text('No hay solicitudes pendientes'))
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.check_circle_outline,
+                          size: 72,
+                          color: Colors.green.shade300,
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Todo tranquilo',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'No tenés solicitudes de desbloqueo pendientes.\nCuando pidas una, aparecerá acá.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
               : RefreshIndicator(
                   onRefresh: () => _refreshAll(triggerSync: true),
                   child: ListView.builder(
@@ -326,18 +357,6 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen>
                                             fontWeight: FontWeight.w600,
                                           ),
                                         ),
-                                        if (displayName != pkg)
-                                          Padding(
-                                            padding:
-                                                const EdgeInsets.only(top: 2),
-                                            child: Text(
-                                              pkg,
-                                              style: const TextStyle(
-                                                fontSize: 12,
-                                                color: Color(0xFF607D8B),
-                                              ),
-                                            ),
-                                          ),
                                         const SizedBox(height: 6),
                                         Text(
                                           'Solicitada: ${_formatRequestedAt(request.requestedAtMillis)}',

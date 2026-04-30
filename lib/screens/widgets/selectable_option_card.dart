@@ -20,13 +20,13 @@ class SelectableOptionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor = selected ? Colors.blue.shade700 : Colors.black12;
+    final borderColor = selected ? Colors.green.shade700 : Colors.black12;
     final backgroundColor = !enabled
         ? Colors.grey.shade100
-        : (selected ? Colors.blue.shade50 : Colors.white);
+        : (selected ? Colors.green.shade50 : Colors.white);
     final iconColor = !enabled
         ? Colors.grey.shade500
-        : (selected ? Colors.blue.shade700 : Colors.black87);
+        : (selected ? Colors.green.shade700 : Colors.black87);
     final titleColor = !enabled ? Colors.grey.shade600 : Colors.black87;
     final subtitleColor = !enabled ? Colors.grey.shade500 : Colors.black54;
 
@@ -72,7 +72,7 @@ class SelectableOptionCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Icon(
                   selected ? Icons.check_circle : Icons.circle_outlined,
-                  color: selected ? Colors.blue.shade700 : Colors.black26,
+                  color: selected ? Colors.green.shade700 : Colors.black26,
                 ),
               ],
             ),

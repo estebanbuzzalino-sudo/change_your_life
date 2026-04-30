@@ -273,7 +273,6 @@ class _AppsSelectionScreenState extends State<AppsSelectionScreen> {
 
                           return CheckboxListTile(
                             title: Text(app.name),
-                            subtitle: Text(app.packageName),
                             value: isSelected,
                             onChanged: (value) {
                               _toggleApp(app, value ?? false);

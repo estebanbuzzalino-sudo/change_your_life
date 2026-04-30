@@ -5,6 +5,7 @@ class BlockScreen extends StatelessWidget {
   final String packageName;
   final String friendName;
   final DateTime endDate;
+  final List<String> replacementCategories;
 
   const BlockScreen({
     super.key,
@@ -12,108 +13,257 @@ class BlockScreen extends StatelessWidget {
     required this.packageName,
     required this.friendName,
     required this.endDate,
+    this.replacementCategories = const [],
   });
 
-  String get formattedDate {
-    return '${endDate.day}/${endDate.month}/${endDate.year}';
+  String get _formattedDate {
+    final day = endDate.day.toString().padLeft(2, '0');
+    final month = endDate.month.toString().padLeft(2, '0');
+    final year = endDate.year;
+    return '$day/$month/$year';
+  }
+
+  String _remainingLabel() {
+    final now = DateTime.now();
+    final diff = endDate.difference(now);
+    if (diff.isNegative) return '';
+    final days = diff.inDays;
+    final hours = diff.inHours % 24;
+    if (days > 0) return '$days d ${hours}h restantes';
+    final minutes = diff.inMinutes % 60;
+    if (hours > 0) return '${hours}h ${minutes}m restantes';
+    return '${diff.inMinutes}m restantes';
+  }
+
+  static const Map<String, List<_Replacement>> _replacementsByCategory = {
+    'reading_learning': [
+      _Replacement(icon: Icons.chrome_reader_mode_rounded, text: 'Lee 10 minutos de un libro o artículo'),
+      _Replacement(icon: Icons.school_rounded, text: 'Avanzá una lección de tu curso guardado'),
+      _Replacement(icon: Icons.translate_rounded, text: 'Practicá vocabulario en otro idioma'),
+    ],
+    'wellbeing_training': [
+      _Replacement(icon: Icons.air_rounded, text: 'Hacé 3 min de respiración profunda'),
+      _Replacement(icon: Icons.directions_walk_rounded, text: 'Salí a caminar 15 minutos'),
+      _Replacement(icon: Icons.fitness_center_rounded, text: 'Completá una mini rutina de ejercicio'),
+    ],
+    'music_creativity': [
+      _Replacement(icon: Icons.queue_music_rounded, text: 'Escuchá una playlist instrumental'),
+      _Replacement(icon: Icons.edit_note_rounded, text: 'Anotá ideas o escribí 10 minutos'),
+      _Replacement(icon: Icons.brush_rounded, text: 'Dibujá un boceto libre'),
+    ],
+    'focus_games': [
+      _Replacement(icon: Icons.psychology_alt_rounded, text: 'Jugá un juego mental o de lógica'),
+      _Replacement(icon: Icons.extension_rounded, text: 'Resolvé un puzzle o crucigrama'),
+    ],
+  };
+
+  static const List<_Replacement> _defaultReplacements = [
+    _Replacement(icon: Icons.menu_book_rounded, text: 'Leé algo interesante'),
+    _Replacement(icon: Icons.fitness_center_rounded, text: 'Hacé ejercicio o estirá'),
+    _Replacement(icon: Icons.air_rounded, text: 'Meditá unos minutos'),
+    _Replacement(icon: Icons.edit_note_rounded, text: 'Escribí algo que tengas en mente'),
+  ];
+
+  List<_Replacement> get _suggestions {
+    if (replacementCategories.isEmpty) return _defaultReplacements;
+    final result = <_Replacement>[];
+    for (final cat in replacementCategories) {
+      final items = _replacementsByCategory[cat];
+      if (items != null) result.addAll(items.take(2));
+    }
+    return result.isEmpty ? _defaultReplacements : result.take(4).toList();
   }
 
   @override
   Widget build(BuildContext context) {
+    final remaining = _remainingLabel();
+    final suggestions = _suggestions;
+
     return Scaffold(
-      backgroundColor: Colors.red.shade50,
+      backgroundColor: Colors.orange.shade50,
       appBar: AppBar(
-        backgroundColor: Colors.red,
+        backgroundColor: Colors.deepOrange.shade700,
         foregroundColor: Colors.white,
-        title: const Text('App bloqueada'),
+        title: const Text('Momento de pausa'),
+        automaticallyImplyLeading: false,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const SizedBox(height: 20),
+            // Ícono + título
             Icon(
-              Icons.block,
-              size: 90,
-              color: Colors.red.shade700,
-            ),
-            const SizedBox(height: 20),
-            Text(
-              '$appName está bloqueada',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-              ),
+              Icons.self_improvement_rounded,
+              size: 72,
+              color: Colors.deepOrange.shade400,
             ),
             const SizedBox(height: 16),
             Text(
-              'Package: $packageName',
+              'Pusiste $appName en pausa',
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 15),
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 6),
+            Text(
+              'Estás eligiendo hacer algo mejor con este tiempo.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 15,
+                color: Colors.grey.shade700,
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // Card de tiempo restante
             Card(
+              elevation: 0,
+              color: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Colors.orange.shade200),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.schedule_rounded,
+                            size: 18,
+                            color: Colors.deepOrange.shade600),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Activo hasta el $_formattedDate',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (remaining.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        remaining,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                    const Divider(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.person_rounded,
+                            size: 16,
+                            color: Colors.grey.shade600),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            'Aprobación a cargo de: $friendName',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // Sugerencias de reemplazos
+            Card(
+              elevation: 0,
+              color: Colors.green.shade50,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Colors.green.shade200),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Este bloqueo sigue activo hasta:',
-                      style: TextStyle(fontSize: 16),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      formattedDate,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    Row(
+                      children: [
+                        Icon(Icons.lightbulb_rounded,
+                            size: 18,
+                            color: Colors.green.shade700),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Aprovechá este momento',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.green.shade800,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 12),
-                    Text(
-                      'Para desbloquearla vas a necesitar aprobación de: $friendName',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 16),
+                    ...suggestions.map(
+                      (s) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Row(
+                          children: [
+                            Icon(s.icon,
+                                size: 20,
+                                color: Colors.green.shade600),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                s.text,
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
+
             const SizedBox(height: 24),
-            Card(
-              color: Colors.green.shade50,
-              child: const Padding(
-                padding: EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    Text(
-                      'En lugar de usar esta app, podés aprovechar este tiempo para:',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 16),
-                    ),
-                    SizedBox(height: 12),
-                    Text('• Leer\n• Estudiar\n• Hacer ejercicio\n• Meditar'),
-                  ],
-                ),
+
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                side: BorderSide(color: Colors.deepOrange.shade300),
+                foregroundColor: Colors.deepOrange.shade700,
               ),
-            ),
-            const Spacer(),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: const Text('Volver'),
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(Icons.arrow_back_rounded),
+              label: const Text('Volver', style: TextStyle(fontSize: 16)),
             ),
           ],
         ),
       ),
     );
   }
+}
+
+class _Replacement {
+  final IconData icon;
+  final String text;
+
+  const _Replacement({required this.icon, required this.text});
 }
