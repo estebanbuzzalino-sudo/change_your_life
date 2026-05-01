@@ -1731,12 +1731,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  String _formatDate(DateTime value) {
-    final day = value.day.toString().padLeft(2, '0');
-    final month = value.month.toString().padLeft(2, '0');
-    return '$day/$month/${value.year}';
-  }
-
   String _formatDateTime(DateTime value) {
     final day = value.day.toString().padLeft(2, '0');
     final month = value.month.toString().padLeft(2, '0');
@@ -1881,35 +1875,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return parts.join(' ');
   }
 
-  Widget _buildSectionHeader({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-  }) {
-    return Row(
-      children: [
-        Icon(icon, size: 22),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildEmptyStateCard({
     required IconData icon,
     required String message,
@@ -1960,7 +1925,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               final activeBlock = _activeBlockForPackage(option.packageName);
               final isAlreadyBlocked = activeBlock != null;
               final blockedSubtitle = isAlreadyBlocked
-                  ? 'Ya bloqueada (${_remainingBlockTimeFrom(activeBlock!.endDate)})'
+                  ? 'Ya bloqueada (${_remainingBlockTimeFrom(activeBlock.endDate)})'
                   : '';
               return Padding(
                 padding: const EdgeInsets.only(bottom: 10),
@@ -2176,7 +2141,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         )
                       else
                         const Text(
-                          'Falta WhatsApp valido del amigo (formato +5491112345678). Editalo en \"Elegir amigo responsable\".',
+                          'Falta WhatsApp valido del amigo (formato +5491112345678). Editalo en "Elegir amigo responsable".',
                           style: TextStyle(
                             color: AppColors.error,
                             fontWeight: FontWeight.w600,
@@ -2408,9 +2373,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         );
                         final isTemporarilyUnlocked = activeTemporaryUnlock != null;
                         final timeLabel = isTemporarilyUnlocked
-                            ? (_isPermanentUnlock(activeTemporaryUnlock!)
+                            ? (_isPermanentUnlock(activeTemporaryUnlock)
                                   ? 'Desbloqueada'
-                                  : _temporaryUnlockLabel(activeTemporaryUnlock!))
+                                  : _temporaryUnlockLabel(activeTemporaryUnlock))
                             : _remainingBlockTimeFrom(block.endDate);
                         final statusLabel = isTemporarilyUnlocked
                             ? 'Desbloqueada temporalmente'
@@ -2577,6 +2542,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
               ),
             ),
+            if (activeBlocks.any((b) => b.endDate.isAfter(DateTime.now()))) ...[
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () {
+                  final block = activeBlocks.firstWhere(
+                    (b) => b.endDate.isAfter(DateTime.now()),
+                  );
+                  _openBlockScreen(block);
+                },
+                icon: const Icon(Icons.preview_rounded),
+                label: const Text('Ver pantalla de pausa'),
+              ),
+            ],
           ],
         ),
       ),
@@ -2818,6 +2796,48 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               icon: const Icon(Icons.bug_report_rounded),
               tooltip: 'Diagnostico sync',
             ),
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'reset') {
+                showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Reiniciar configuración'),
+                    content: const Text(
+                      'Se borrará toda la configuración guardada (apps, amigo, reemplazos). ¿Continuás?',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Cancelar'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text(
+                          'Reiniciar',
+                          style: TextStyle(color: AppColors.error),
+                        ),
+                      ),
+                    ],
+                  ),
+                ).then((confirmed) {
+                  if (confirmed == true) _clearAllData();
+                });
+              }
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'reset',
+                child: Row(
+                  children: [
+                    Icon(Icons.restart_alt_rounded, size: 20),
+                    SizedBox(width: 10),
+                    Text('Reiniciar configuración'),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ],
       ),
       body: Column(

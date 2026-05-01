@@ -176,7 +176,7 @@ class UnlockGrantsSyncService {
             remoteGrantDetails[package] = UnlockGrantActiveGrant(
               packageName: package,
               unlockUntilMillis: untilMillis,
-              requestId: (requestId == null || requestId.trim().isEmpty) ? null : requestId.trim(),
+              requestId: requestId.trim().isEmpty ? null : requestId.trim(),
               appName: (appName == null || appName.trim().isEmpty) ? null : appName.trim(),
               minutes: minutesRaw,
             );
