@@ -13,6 +13,7 @@ import '../theme/app_theme.dart';
 import '../services/accessibility_service_status.dart';
 import '../services/unlock_grants_sync_service.dart';
 import 'friend_screen.dart';
+import 'stats_screen.dart';
 import 'block_screen.dart';
 import 'debug_sync_diagnostics_screen.dart';
 import 'pending_requests_screen.dart';
@@ -2798,7 +2799,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
           PopupMenuButton<String>(
             onSelected: (value) {
-              if (value == 'reset') {
+              if (value == 'stats') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const StatsScreen()),
+                );
+              } else if (value == 'reset') {
                 showDialog<bool>(
                   context: context,
                   builder: (ctx) => AlertDialog(
@@ -2826,6 +2832,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               }
             },
             itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'stats',
+                child: Row(
+                  children: [
+                    Icon(Icons.bar_chart_rounded, size: 20),
+                    SizedBox(width: 10),
+                    Text('Estadísticas e historial'),
+                  ],
+                ),
+              ),
               PopupMenuItem(
                 value: 'reset',
                 child: Row(
