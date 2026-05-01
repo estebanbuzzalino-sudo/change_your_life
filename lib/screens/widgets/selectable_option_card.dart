@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
 
 class SelectableOptionCard extends StatelessWidget {
   final String title;
@@ -20,15 +21,15 @@ class SelectableOptionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor = selected ? Colors.green.shade700 : Colors.black12;
+    final borderColor = selected ? AppColors.primary : AppColors.borderStrong;
     final backgroundColor = !enabled
-        ? Colors.grey.shade100
-        : (selected ? Colors.green.shade50 : Colors.white);
+        ? AppColors.surface
+        : (selected ? AppColors.primary.withValues(alpha: 0.10) : AppColors.card);
     final iconColor = !enabled
-        ? Colors.grey.shade500
-        : (selected ? Colors.green.shade700 : Colors.black87);
-    final titleColor = !enabled ? Colors.grey.shade600 : Colors.black87;
-    final subtitleColor = !enabled ? Colors.grey.shade500 : Colors.black54;
+        ? AppColors.textMuted
+        : (selected ? AppColors.primary : AppColors.textSecondary);
+    final titleColor = !enabled ? AppColors.textMuted : AppColors.textPrimary;
+    final subtitleColor = !enabled ? AppColors.textMuted : AppColors.textSecondary;
 
     return Material(
       color: backgroundColor,
@@ -72,7 +73,7 @@ class SelectableOptionCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Icon(
                   selected ? Icons.check_circle : Icons.circle_outlined,
-                  color: selected ? Colors.green.shade700 : Colors.black26,
+                  color: selected ? AppColors.primary : AppColors.textMuted,
                 ),
               ],
             ),

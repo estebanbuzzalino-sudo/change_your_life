@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 
 class BlockScreen extends StatelessWidget {
   final String appName;
@@ -80,10 +81,10 @@ class BlockScreen extends StatelessWidget {
     final suggestions = _suggestions;
 
     return Scaffold(
-      backgroundColor: Colors.orange.shade50,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.deepOrange.shade700,
-        foregroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
+        foregroundColor: AppColors.textPrimary,
         title: const Text('Momento de pausa'),
         automaticallyImplyLeading: false,
       ),
@@ -96,7 +97,7 @@ class BlockScreen extends StatelessWidget {
             Icon(
               Icons.self_improvement_rounded,
               size: 72,
-              color: Colors.deepOrange.shade400,
+              color: AppColors.orange,
             ),
             const SizedBox(height: 16),
             Text(
@@ -105,15 +106,16 @@ class BlockScreen extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
               ),
             ),
             const SizedBox(height: 6),
-            Text(
+            const Text(
               'Estás eligiendo hacer algo mejor con este tiempo.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 15,
-                color: Colors.grey.shade700,
+                color: AppColors.textSecondary,
               ),
             ),
 
@@ -122,10 +124,10 @@ class BlockScreen extends StatelessWidget {
             // Card de tiempo restante
             Card(
               elevation: 0,
-              color: Colors.white,
+              color: AppColors.card,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: Colors.orange.shade200),
+                side: BorderSide(color: AppColors.orange.withValues(alpha: 0.30)),
               ),
               child: Padding(
                 padding: const EdgeInsets.symmetric(
@@ -139,13 +141,14 @@ class BlockScreen extends StatelessWidget {
                       children: [
                         Icon(Icons.schedule_rounded,
                             size: 18,
-                            color: Colors.deepOrange.shade600),
+                            color: AppColors.orange),
                         const SizedBox(width: 6),
                         Text(
                           'Activo hasta el $_formattedDate',
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
                           ),
                         ),
                       ],
@@ -155,9 +158,9 @@ class BlockScreen extends StatelessWidget {
                       Text(
                         remaining,
                         textAlign: TextAlign.center,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 13,
-                          color: Colors.grey.shade600,
+                          color: AppColors.textSecondary,
                         ),
                       ),
                     ],
@@ -165,17 +168,17 @@ class BlockScreen extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.person_rounded,
+                        const Icon(Icons.person_rounded,
                             size: 16,
-                            color: Colors.grey.shade600),
+                            color: AppColors.textMuted),
                         const SizedBox(width: 6),
                         Flexible(
                           child: Text(
                             'Aprobación a cargo de: $friendName',
                             textAlign: TextAlign.center,
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 13,
-                              color: Colors.grey.shade700,
+                              color: AppColors.textSecondary,
                             ),
                           ),
                         ),
@@ -191,28 +194,28 @@ class BlockScreen extends StatelessWidget {
             // Sugerencias de reemplazos
             Card(
               elevation: 0,
-              color: Colors.green.shade50,
+              color: AppColors.primary.withValues(alpha: 0.08),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: Colors.green.shade200),
+                side: BorderSide(color: AppColors.primary.withValues(alpha: 0.25)),
               ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
+                    const Row(
                       children: [
                         Icon(Icons.lightbulb_rounded,
                             size: 18,
-                            color: Colors.green.shade700),
-                        const SizedBox(width: 8),
+                            color: AppColors.primary),
+                        SizedBox(width: 8),
                         Text(
                           'Aprovechá este momento',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
-                            color: Colors.green.shade800,
+                            color: AppColors.primaryLight,
                           ),
                         ),
                       ],
@@ -225,12 +228,15 @@ class BlockScreen extends StatelessWidget {
                           children: [
                             Icon(s.icon,
                                 size: 20,
-                                color: Colors.green.shade600),
+                                color: AppColors.primary),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
                                 s.text,
-                                style: const TextStyle(fontSize: 14),
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: AppColors.textPrimary,
+                                ),
                               ),
                             ),
                           ],
@@ -245,11 +251,6 @@ class BlockScreen extends StatelessWidget {
             const SizedBox(height: 24),
 
             OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                side: BorderSide(color: Colors.deepOrange.shade300),
-                foregroundColor: Colors.deepOrange.shade700,
-              ),
               onPressed: () => Navigator.pop(context),
               icon: const Icon(Icons.arrow_back_rounded),
               label: const Text('Volver', style: TextStyle(fontSize: 16)),

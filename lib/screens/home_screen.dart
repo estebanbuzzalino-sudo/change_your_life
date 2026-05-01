@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/app_block.dart';
+import '../theme/app_theme.dart';
 import '../services/accessibility_service_status.dart';
 import '../services/unlock_grants_sync_service.dart';
 import 'friend_screen.dart';
@@ -1162,7 +1163,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   const SizedBox(height: 6),
                   const Text(
                     'Toca una opcion para abrirla en Play Store y usarla ahora.',
-                    style: TextStyle(color: Colors.black54),
+                    style: TextStyle(color: AppColors.textSecondary),
                   ),
                   const SizedBox(height: 10),
                   ...sortedIdeas.map(
@@ -1177,8 +1178,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: const Color(0xFFD5D8E0)),
-                              color: Colors.white,
+                              border: Border.all(color: AppColors.borderStrong),
+                              color: AppColors.card,
                             ),
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1187,10 +1188,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   width: 42,
                                   height: 42,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFEFF3FF),
+                                    color: AppColors.primary.withValues(alpha: 0.12),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
-                                  child: Icon(idea.icon, color: const Color(0xFF3558D6)),
+                                  child: Icon(idea.icon, color: AppColors.primary),
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(
@@ -1222,7 +1223,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                 style: TextStyle(
                                                   fontSize: 11,
                                                   fontWeight: FontWeight.w700,
-                                                  color: Color(0xFF1E7B3A),
+                                                  color: AppColors.primary,
                                                 ),
                                               ),
                                             ),
@@ -1231,13 +1232,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                       const SizedBox(height: 4),
                                       Text(
                                         idea.action,
-                                        style: const TextStyle(color: Colors.black87),
+                                        style: const TextStyle(color: AppColors.textSecondary),
                                       ),
                                       const SizedBox(height: 6),
                                       const Text(
                                         'Abrir en Play Store',
                                         style: TextStyle(
-                                          color: Color(0xFF3558D6),
+                                          color: AppColors.primary,
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
@@ -1900,7 +1901,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               const SizedBox(height: 2),
               Text(
                 subtitle,
-                style: const TextStyle(fontSize: 13, color: Colors.black54),
+                style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
               ),
             ],
           ),
@@ -1918,12 +1919,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         padding: const EdgeInsets.all(14),
         child: Row(
           children: [
-            Icon(icon, color: Colors.black54),
+            Icon(icon, color: AppColors.textMuted),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 message,
-                style: const TextStyle(color: Colors.black87),
+                style: const TextStyle(color: AppColors.textSecondary),
               ),
             ),
           ],
@@ -2161,7 +2162,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       _requiresWhatsappChannel
                           ? 'Se envia por WhatsApp automaticamente.'
                           : 'Se envia por email automaticamente.',
-                      style: const TextStyle(color: Colors.black54),
+                      style: const TextStyle(color: AppColors.textSecondary),
                     ),
                     if (_requiresWhatsappChannel) ...[
                       const SizedBox(height: 8),
@@ -2169,7 +2170,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         Text(
                           'WhatsApp configurado: ${friendWhatsappE164 ?? ''}',
                           style: const TextStyle(
-                            color: Color(0xFF1E7B3A),
+                            color: AppColors.primary,
                             fontWeight: FontWeight.w600,
                           ),
                         )
@@ -2177,7 +2178,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         const Text(
                           'Falta WhatsApp valido del amigo (formato +5491112345678). Editalo en \"Elegir amigo responsable\".',
                           style: TextStyle(
-                            color: Color(0xFFB3261E),
+                            color: AppColors.error,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -2203,7 +2204,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Card(
-              color: Colors.blue.shade50,
+              color: AppColors.primary.withValues(alpha: 0.08),
               child: const Padding(
                 padding: EdgeInsets.all(12),
                 child: Column(
@@ -2299,17 +2300,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Card(
-              color: isBlockingActive ? Colors.green.shade50 : Colors.orange.shade50,
+              color: isBlockingActive
+                  ? AppColors.primary.withValues(alpha: 0.10)
+                  : AppColors.orange.withValues(alpha: 0.10),
               child: ListTile(
                 leading: Icon(
                   isBlockingActive ? Icons.verified_rounded : Icons.warning_amber_rounded,
-                  color: isBlockingActive ? Colors.green.shade700 : Colors.orange.shade700,
+                  color: isBlockingActive ? AppColors.primary : AppColors.orange,
                 ),
                 title: Text(
                   isBlockingActive ? 'Bloqueo activo' : 'Bloqueo pendiente',
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
-                    color: isBlockingActive ? Colors.green.shade800 : Colors.orange.shade800,
+                    color: isBlockingActive ? AppColors.primaryLight : AppColors.orangeLight,
                   ),
                 ),
                 subtitle: Text(remainingOverview),
@@ -2421,7 +2424,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     ? Icons.lock_open_rounded
                                     : Icons.lock_clock_rounded,
                                 size: 18,
-                                color: isTemporarilyUnlocked ? Colors.teal.shade700 : null,
+                                color: isTemporarilyUnlocked ? AppColors.primaryLight : null,
                               ),
                               const SizedBox(width: 8),
                               Expanded(
@@ -2435,8 +2438,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                         fontSize: 12,
                                         fontWeight: FontWeight.w600,
                                         color: isTemporarilyUnlocked
-                                            ? Colors.teal.shade700
-                                            : Colors.black54,
+                                            ? AppColors.primaryLight
+                                            : AppColors.textMuted,
                                       ),
                                     ),
                                   ],
@@ -2509,7 +2512,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     const SizedBox(height: 6),
                     const Text(
                       'Aqui ves lo que tu amigo aun debe aprobar y cualquier desbloqueo temporal ya activo.',
-                      style: TextStyle(color: Colors.black54),
+                      style: TextStyle(color: AppColors.textSecondary),
                     ),
                     const SizedBox(height: 10),
                     OutlinedButton.icon(
@@ -2692,8 +2695,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: isDone || isActive
-                          ? Colors.green.shade600
-                          : Colors.grey.shade300,
+                          ? AppColors.primary
+                          : AppColors.border,
                     ),
                   ),
                   if (i < total - 1)
@@ -2702,8 +2705,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       height: 2,
                       margin: const EdgeInsets.symmetric(horizontal: 4),
                       color: isDone
-                          ? Colors.green.shade400
-                          : Colors.grey.shade300,
+                          ? AppColors.primaryMuted
+                          : AppColors.border,
                     ),
                 ],
               );
@@ -2717,15 +2720,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             children: [
               Text(
                 _wizardStepTitles[current],
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: Colors.green.shade700,
+                  color: AppColors.primary,
                 ),
               ),
               Text(
                 'Paso ${current + 1} de $total',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
               ),
             ],
           ),
@@ -2733,8 +2736,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         LinearProgressIndicator(
           value: progress,
           minHeight: 3,
-          backgroundColor: Colors.grey.shade200,
-          valueColor: AlwaysStoppedAnimation(Colors.green.shade500),
+          backgroundColor: AppColors.border,
+          valueColor: const AlwaysStoppedAnimation(AppColors.primary),
         ),
       ],
     );
@@ -2742,7 +2745,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Widget _buildAccessibilityWarningBanner() {
     return Material(
-      color: Colors.red.shade700,
+      color: AppColors.error,
       child: InkWell(
         onTap: () async {
           await _accessibilityStatus.openSettings();

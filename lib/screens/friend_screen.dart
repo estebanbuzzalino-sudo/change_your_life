@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 
 class FriendScreen extends StatefulWidget {
   final String? initialRequesterName;
@@ -110,14 +111,14 @@ class _FriendScreenState extends State<FriendScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.green.shade50,
+                color: AppColors.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.green.shade200),
+                border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.handshake_rounded,
-                      color: Colors.green.shade700, size: 28),
+                  const Icon(Icons.handshake_rounded,
+                      color: AppColors.primary, size: 28),
                   const SizedBox(width: 12),
                   const Expanded(
                     child: Text(
@@ -197,9 +198,9 @@ class _FriendScreenState extends State<FriendScreen> {
             const SizedBox(height: 8),
             Padding(
               padding: const EdgeInsets.only(left: 4),
-              child: Text(
+              child: const Text(
                 'Completá al menos uno: email o WhatsApp.',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
               ),
             ),
 
@@ -228,14 +229,14 @@ class _FriendScreenState extends State<FriendScreen> {
   }) {
     return Row(
       children: [
-        Icon(icon, size: 18, color: Colors.green.shade700),
+        Icon(icon, size: 18, color: AppColors.primary),
         const SizedBox(width: 8),
         Text(
           label,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w700,
-            color: Colors.green.shade800,
+            color: AppColors.primaryLight,
           ),
         ),
       ],

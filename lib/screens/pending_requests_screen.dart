@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/unlock_grants_sync_service.dart';
 import '../services/unlock_request_resender.dart';
+import '../theme/app_theme.dart';
 
 class PendingUnlockRequest {
   final String packageName;
@@ -259,14 +260,14 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen>
       return Chip(
         avatar: const Icon(Icons.check_circle, color: Colors.white, size: 18),
         label: Text('Aprobada · ${_formatRemaining(until)}'),
-        backgroundColor: const Color(0xFF2E7D32),
+        backgroundColor: AppColors.primaryMuted,
         labelStyle: const TextStyle(color: Colors.white),
       );
     }
     return const Chip(
       avatar: Icon(Icons.hourglass_top, color: Colors.white, size: 18),
       label: Text('Pendiente'),
-      backgroundColor: Color(0xFFE65100),
+      backgroundColor: AppColors.orange,
       labelStyle: TextStyle(color: Colors.white),
     );
   }
@@ -293,10 +294,10 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen>
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
+                        const Icon(
                           Icons.check_circle_outline,
                           size: 72,
-                          color: Colors.green.shade300,
+                          color: AppColors.primary,
                         ),
                         const SizedBox(height: 16),
                         const Text(
@@ -304,15 +305,16 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen>
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
                           ),
                         ),
                         const SizedBox(height: 8),
-                        Text(
+                        const Text(
                           'No tenés solicitudes de desbloqueo pendientes.\nCuando pidas una, aparecerá acá.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 14,
-                            color: Colors.grey.shade600,
+                            color: AppColors.textSecondary,
                           ),
                         ),
                       ],
