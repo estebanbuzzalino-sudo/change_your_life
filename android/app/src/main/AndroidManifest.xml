@@ -6,7 +6,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
-        android:label="change_your_life"
+        android:label="Change Your Life"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 
