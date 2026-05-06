@@ -13,7 +13,8 @@ class OnboardingScreen extends StatefulWidget {
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen> {
+class _OnboardingScreenState extends State<OnboardingScreen>
+    with WidgetsBindingObserver {
   final _pageController = PageController();
   int _currentPage = 0;
 
@@ -29,13 +30,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _checkPermissions();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pageController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkPermissions();
+    }
   }
 
   Future<void> _checkPermissions() async {
@@ -140,14 +150,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
             child: const Icon(
-              Icons.shield_rounded,
+              Icons.bolt_rounded,
               size: 52,
               color: AppColors.primary,
             ),
           ),
           const SizedBox(height: 32),
           const Text(
-            'Bienvenido a\nChange Your Life',
+            'Bienvenido a\nUnscroll',
             style: TextStyle(
               fontSize: 30,
               fontWeight: FontWeight.w800,
@@ -234,9 +244,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           const SizedBox(height: 20),
           _buildPermissionSteps(const [
             'Tocá "Activar permiso" abajo',
-            'Buscá "Change Your Life" en la lista',
-            'Activá el interruptor y confirmá',
-            'Volvé a esta pantalla',
+            'Buscá "Unscroll" en la lista de servicios',
+            'Tocá "Unscroll" y activá el interruptor que aparece arriba a la derecha',
+            'Confirmá en el diálogo y volvé aquí',
           ]),
           const Spacer(flex: 2),
           if (_checkingPermissions)
@@ -328,9 +338,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           const SizedBox(height: 20),
           _buildPermissionSteps(const [
             'Tocá "Activar permiso" abajo',
-            'Buscá "Change Your Life" en la lista',
-            'Activá el acceso de uso de apps',
-            'Volvé a esta pantalla',
+            'Buscá "Unscroll" en la lista',
+            'Activá el interruptor junto a "Unscroll"',
+            'Confirmá y volvé aquí',
           ]),
           const Spacer(flex: 2),
           if (_checkingPermissions)
