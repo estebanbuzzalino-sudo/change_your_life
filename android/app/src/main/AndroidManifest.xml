@@ -15,7 +15,7 @@
             android:exported="false"
             android:launchMode="singleTask"
             android:excludeFromRecents="true"
-            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
+            android:theme="@style/BlockActivityTheme" />
 
         <activity
             android:name="com.example.change_your_life.MainActivity"

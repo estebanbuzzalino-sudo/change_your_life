@@ -816,8 +816,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _loadInstalledPackagesForWizard() async {
     try {
       final installedApps = await InstalledApps.getInstalledApps(
-        excludeSystemApps: true,
-        excludeNonLaunchableApps: true,
+        excludeSystemApps: false,
+        excludeNonLaunchableApps: false,
         withIcon: false,
       );
 
@@ -2786,7 +2786,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
             const SizedBox(width: 10),
             const Flexible(
-              child: Text('Change Your Life in Community'),
+              child: Text('Unscroll'),
             ),
           ],
         ),
