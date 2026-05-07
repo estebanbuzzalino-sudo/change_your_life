@@ -21,9 +21,9 @@ class ChangeYourLifeApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Unscroll',
-      theme: AppTheme.dark,
-      darkTheme: AppTheme.dark,
-      themeMode: ThemeMode.dark,
+      theme: SRTheme.light,
+      darkTheme: SRTheme.light,
+      themeMode: ThemeMode.light,
       home: showOnboarding ? const OnboardingScreen() : const HomeScreen(),
     );
   }
