@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'colors.dart';
 
 // ─────────────────────────────────────────────
 //  Paleta "Vínculo" — Change Your Life
@@ -257,6 +259,126 @@ class AppTheme {
         checkColor: WidgetStateProperty.all(Colors.white),
         side: const BorderSide(color: AppColors.borderStrong, width: 1.5),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+//  SRTheme — "Sunrise" design system
+// ─────────────────────────────────────────────
+class SRTheme {
+  SRTheme._();
+
+  static ThemeData get light => _buildLight();
+
+  static ThemeData _buildLight() {
+    final pjs = GoogleFonts.plusJakartaSans().fontFamily;
+
+    final textTheme = TextTheme(
+      // Display — 28pt w800
+      displayLarge: GoogleFonts.plusJakartaSans(
+        fontSize: 28,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -0.6,
+        height: 1.1,
+        color: SRColors.ink,
+      ),
+      // Title — 22pt w800
+      titleLarge: GoogleFonts.plusJakartaSans(
+        fontSize: 22,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -0.5,
+        color: SRColors.ink,
+      ),
+      // Heading — 16pt w800
+      titleMedium: GoogleFonts.plusJakartaSans(
+        fontSize: 16,
+        fontWeight: FontWeight.w800,
+        color: SRColors.ink,
+      ),
+      // Body — 14pt w500
+      bodyLarge: GoogleFonts.plusJakartaSans(
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+        height: 1.5,
+        color: SRColors.ink2,
+      ),
+      // Body small — 13pt w600
+      bodyMedium: GoogleFonts.plusJakartaSans(
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        height: 1.5,
+        color: SRColors.ink2,
+      ),
+      // Caption — 11pt w700 uppercase
+      labelSmall: GoogleFonts.plusJakartaSans(
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 1.2,
+        color: SRColors.ink2,
+      ),
+    );
+
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+      colorScheme: const ColorScheme.light(
+        primary: SRColors.primary,
+        secondary: SRColors.secondary,
+        surface: SRColors.card,
+        onPrimary: Colors.white,
+        onSecondary: Colors.white,
+        onSurface: SRColors.ink,
+      ),
+      scaffoldBackgroundColor: SRColors.bg,
+      fontFamily: pjs,
+      textTheme: textTheme,
+
+      // ── AppBar ───────────────────────────────
+      appBarTheme: AppBarTheme(
+        backgroundColor: SRColors.bg,
+        foregroundColor: SRColors.ink,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: false,
+        titleTextStyle: GoogleFonts.plusJakartaSans(
+          fontSize: 16,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.3,
+          color: SRColors.ink,
+        ),
+        systemOverlayStyle: const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
+        ),
+      ),
+
+      // ── ElevatedButton base ──────────────────
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: SRColors.primary,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          minimumSize: const Size.fromHeight(54),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          textStyle: GoogleFonts.plusJakartaSans(
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+
+      // ── Cards ────────────────────────────────
+      cardTheme: CardThemeData(
+        color: SRColors.card,
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+        ),
       ),
     );
   }
