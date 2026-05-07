@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="es">
+<!--
+  Feature Graphic para Play Store — 1024 x 500 px
+  Para exportar: abrí este archivo en Chrome, abrí DevTools,
+  ajustá viewport a 1024x500 (Device Toolbar) y hacé screenshot.
+  O usá: puppeteer / wkhtmltoimage / cualquier herramienta de HTML→PNG.
+-->
+<head>
+  <meta charset="UTF-8"/>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 1024px;
+      height: 500px;
+      overflow: hidden;
+      background: #080B14;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      position: relative;
+    }
+
+    /* Glow de fondo */
+    .glow-left {
+      position: absolute;
+      width: 400px; height: 400px;
+      background: radial-gradient(circle, rgba(34,197,94,0.18) 0%, transparent 70%);
+      top: -80px; left: -60px;
+    }
+    .glow-right {
+      position: absolute;
+      width: 350px; height: 350px;
+      background: radial-gradient(circle, rgba(249,115,22,0.12) 0%, transparent 70%);
+      bottom: -80px; right: 80px;
+    }
+
+    /* Grid decorativo */
+    .grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size: 48px 48px;
+    }
+
+    .content {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      height: 100%;
+      padding: 0 64px;
+      gap: 64px;
+    }
+
+    /* Lado izquierdo */
+    .left { flex: 1; }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(34,197,94,0.12);
+      border: 1px solid rgba(34,197,94,0.30);
+      border-radius: 20px;
+      padding: 6px 14px;
+      margin-bottom: 20px;
+    }
+    .badge-dot {
+      width: 8px; height: 8px;
+      background: #22C55E;
+      border-radius: 50%;
+    }
+    .badge span {
+      font-size: 13px;
+      font-weight: 700;
+      color: #22C55E;
+      letter-spacing: 0.5px;
+    }
+
+    h1 {
+      font-size: 52px;
+      font-weight: 900;
+      color: #F1F5F9;
+      line-height: 1.1;
+      margin-bottom: 16px;
+      letter-spacing: -1px;
+    }
+    h1 em {
+      font-style: normal;
+      color: #22C55E;
+    }
+
+    .tagline {
+      font-size: 18px;
+      color: #64748B;
+      line-height: 1.5;
+      max-width: 380px;
+    }
+
+    /* Features pills */
+    .pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 24px;
+    }
+    .pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 20px;
+      padding: 6px 14px;
+    }
+    .pill-icon { font-size: 14px; }
+    .pill span { font-size: 13px; color: #94A3B8; font-weight: 600; }
+
+    /* Lado derecho — mockup visual */
+    .right {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    .phone {
+      width: 180px;
+      background: #0D1120;
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 28px;
+      padding: 16px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .phone.main { width: 200px; transform: translateY(-16px); }
+
+    .ph-header {
+      background: rgba(34,197,94,0.10);
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ph-icon {
+      width: 28px; height: 28px;
+      background: rgba(34,197,94,0.20);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+    }
+    .ph-title { font-size: 11px; font-weight: 700; color: #22C55E; }
+    .ph-sub { font-size: 9px; color: #4ADE80; margin-top: 1px; }
+
+    .ph-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .ph-row-icon { font-size: 14px; }
+    .ph-row-text { font-size: 10px; color: #94A3B8; }
+    .ph-check {
+      margin-left: auto;
+      width: 16px; height: 16px;
+      background: rgba(34,197,94,0.15);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 9px;
+      color: #22C55E;
+    }
+
+    .ph-cta {
+      background: #22C55E;
+      border-radius: 10px;
+      padding: 10px;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: #fff;
+      margin-top: 4px;
+    }
+
+    .ph-stats {
+      display: flex;
+      gap: 6px;
+    }
+    .ph-stat {
+      flex: 1;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 8px;
+      padding: 8px 6px;
+      text-align: center;
+    }
+    .ph-stat-val { font-size: 14px; font-weight: 800; color: #22C55E; }
+    .ph-stat-lbl { font-size: 8px; color: #64748B; margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <div class="glow-left"></div>
+  <div class="glow-right"></div>
+  <div class="grid"></div>
+
+  <div class="content">
+    <!-- Texto izquierdo -->
+    <div class="left">
+      <div class="badge">
+        <div class="badge-dot"></div>
+        <span>EN COMUNIDAD</span>
+      </div>
+
+      <h1>Cambiá tu<br/>vida <em>en serio</em></h1>
+
+      <p class="tagline">
+        Bloqueá redes sociales y recuperá tu tiempo
+        con el apoyo de alguien que te importa.
+      </p>
+
+      <div class="pills">
+        <div class="pill">
+          <span class="pill-icon">🔒</span>
+          <span>Bloqueo real</span>
+        </div>
+        <div class="pill">
+          <span class="pill-icon">🤝</span>
+          <span>Amigo responsable</span>
+        </div>
+        <div class="pill">
+          <span class="pill-icon">🌱</span>
+          <span>Actividades de reemplazo</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mockups de teléfono -->
+    <div class="right">
+      <div class="phone">
+        <div class="ph-header">
+          <div class="ph-icon">🧘</div>
+          <div>
+            <div class="ph-title">Momento de pausa</div>
+            <div class="ph-sub">Instagram bloqueado · 12d restantes</div>
+          </div>
+        </div>
+        <div class="ph-row">
+          <span class="ph-row-icon">📖</span>
+          <span class="ph-row-text">Leé 10 minutos</span>
+        </div>
+        <div class="ph-row">
+          <span class="ph-row-icon">🏃</span>
+          <span class="ph-row-text">Salí a caminar</span>
+        </div>
+        <div class="ph-row">
+          <span class="ph-row-icon">🎵</span>
+          <span class="ph-row-text">Playlist instrumental</span>
+        </div>
+      </div>
+
+      <div class="phone main">
+        <div class="ph-stats">
+          <div class="ph-stat">
+            <div class="ph-stat-val">14</div>
+            <div class="ph-stat-lbl">Días</div>
+          </div>
+          <div class="ph-stat">
+            <div class="ph-stat-val">3</div>
+            <div class="ph-stat-lbl">Apps</div>
+          </div>
+          <div class="ph-stat">
+            <div class="ph-stat-val">✓</div>
+            <div class="ph-stat-lbl">Activo</div>
+          </div>
+        </div>
+        <div class="ph-row">
+          <span class="ph-row-icon">📱</span>
+          <span class="ph-row-text">Instagram</span>
+          <div class="ph-check">✓</div>
+        </div>
+        <div class="ph-row">
+          <span class="ph-row-icon">📱</span>
+          <span class="ph-row-text">TikTok</span>
+          <div class="ph-check">✓</div>
+        </div>
+        <div class="ph-row">
+          <span class="ph-row-icon">📱</span>
+          <span class="ph-row-text">YouTube</span>
+          <div class="ph-check">✓</div>
+        </div>
+        <div class="ph-cta">Bloqueo activo ✓</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

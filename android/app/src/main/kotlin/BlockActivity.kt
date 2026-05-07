@@ -5,6 +5,8 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.widget.Button
 import android.widget.TextView
@@ -46,18 +48,35 @@ class BlockActivity : Activity() {
 
     @Volatile
     private var isRequestInFlight: Boolean = false
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val requestWatchdogTimeoutMillis = 30_000L
+    private val requestWatchdog = Runnable {
+        if (isRequestInFlight) {
+            isRequestInFlight = false
+            requestUnlockButton.isEnabled = true
+            requestUnlockButton.text = "Solicitar desbloqueo"
+            Toast.makeText(
+                this,
+                "La solicitud tardó demasiado. Probá de nuevo.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
     private lateinit var titleText: TextView
+    private lateinit var endDateText: TextView
     private lateinit var openReplacementsButton: Button
     private lateinit var requestUnlockButton: Button
     private lateinit var closeButton: Button
     private var currentAppName: String = "App"
     private var currentPackageName: String = ""
+    private var currentEndDateMillis: Long = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_block)
 
         titleText = findViewById(R.id.blockTitle)
+        endDateText = findViewById(R.id.blockEndDateText)
         openReplacementsButton = findViewById(R.id.openReplacementsButton)
         requestUnlockButton = findViewById(R.id.requestUnlockButton)
         closeButton = findViewById(R.id.closeButton)
@@ -86,12 +105,14 @@ class BlockActivity : Activity() {
             isRequestInFlight = true
             requestUnlockButton.isEnabled = false
             requestUnlockButton.text = "Enviando..."
+            mainHandler.postDelayed(requestWatchdog, requestWatchdogTimeoutMillis)
 
             sendUnlockRequestAutomatically(
                 appName = currentAppName,
                 packageName = currentPackageName,
                 request = request,
                 onSuccess = {
+                    mainHandler.removeCallbacks(requestWatchdog)
                     isRequestInFlight = false
                     requestUnlockButton.isEnabled = true
                     requestUnlockButton.text = "Solicitar desbloqueo"
@@ -102,6 +123,7 @@ class BlockActivity : Activity() {
                     ).show()
                 },
                 onFailure = { failureReason ->
+                    mainHandler.removeCallbacks(requestWatchdog)
                     isRequestInFlight = false
                     requestUnlockButton.isEnabled = true
                     requestUnlockButton.text = "Solicitar desbloqueo"
@@ -152,6 +174,7 @@ class BlockActivity : Activity() {
     override fun onDestroy() {
         isVisible = false
         visiblePackageName = null
+        mainHandler.removeCallbacks(requestWatchdog)
         super.onDestroy()
     }
 
@@ -193,11 +216,40 @@ class BlockActivity : Activity() {
     private fun bindIntentData(intent: Intent?) {
         currentAppName = intent?.getStringExtra("appName")?.takeIf { it.isNotBlank() } ?: "App"
         currentPackageName = intent?.getStringExtra("packageName") ?: ""
+        currentEndDateMillis = intent?.getLongExtra("endDateMillis", 0L) ?: 0L
 
         titleText.text = "$currentAppName esta bloqueada"
+        renderEndDate(currentEndDateMillis)
 
         visiblePackageName = currentPackageName
         lastVisibleAtMillis = System.currentTimeMillis()
+    }
+
+    private fun renderEndDate(endDateMillis: Long) {
+        if (endDateMillis <= 0L) {
+            endDateText.visibility = android.view.View.GONE
+            return
+        }
+        val now = System.currentTimeMillis()
+        val remainingMillis = endDateMillis - now
+        if (remainingMillis <= 0L) {
+            endDateText.visibility = android.view.View.GONE
+            return
+        }
+
+        val totalMinutes = remainingMillis / 60000L
+        val days = totalMinutes / (60 * 24)
+        val hours = (totalMinutes % (60 * 24)) / 60
+        val minutes = totalMinutes % 60
+
+        val parts = mutableListOf<String>()
+        if (days > 0) parts.add("$days d")
+        if (hours > 0) parts.add("$hours h")
+        if (days == 0L && minutes > 0) parts.add("$minutes min")
+        if (parts.isEmpty()) parts.add("menos de 1 min")
+
+        endDateText.text = "Bloqueo activo: ${parts.joinToString(" ")} restantes"
+        endDateText.visibility = android.view.View.VISIBLE
     }
 
     private fun openReplacementsExperience() {
@@ -371,10 +423,20 @@ class BlockActivity : Activity() {
                     )
                 }
 
-                val requestId = parsed
-                    ?.optJSONObject("data")
-                    ?.optString("requestId")
-                    ?.takeIf { it.isNotBlank() }
+                val data = parsed?.optJSONObject("data")
+                val requestId = data?.optString("requestId")?.takeIf { it.isNotBlank() }
+                val emailSent = data?.optBoolean("emailSent", false) ?: false
+                val whatsappAttempted = data?.optBoolean("whatsappAttempted", false) ?: false
+                val whatsappSent = data?.optBoolean("whatsappSent", false) ?: false
+
+                val anyChannelSent = emailSent || whatsappSent
+                if (!anyChannelSent && (data?.has("emailSent") == true || whatsappAttempted)) {
+                    return BackendRequestResult(
+                        success = false,
+                        requestId = requestId,
+                        errorMessage = "no se pudo notificar al amigo (email/whatsapp fallaron)"
+                    )
+                }
 
                 BackendRequestResult(
                     success = true,

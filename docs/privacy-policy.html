@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Política de Privacidad — Change Your Life in Community</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #080B14;
+      color: #F1F5F9;
+      line-height: 1.7;
+      padding: 32px 16px 64px;
+    }
+    .container { max-width: 720px; margin: 0 auto; }
+    h1 {
+      font-size: 28px;
+      font-weight: 800;
+      color: #22C55E;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      color: #64748B;
+      font-size: 14px;
+      margin-bottom: 40px;
+    }
+    h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #4ADE80;
+      margin: 32px 0 12px;
+    }
+    p { color: #94A3B8; margin-bottom: 12px; }
+    ul { color: #94A3B8; padding-left: 20px; margin-bottom: 12px; }
+    li { margin-bottom: 6px; }
+    a { color: #22C55E; }
+    .card {
+      background: #151C2C;
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 12px;
+      padding: 20px;
+      margin: 16px 0;
+    }
+    .badge {
+      display: inline-block;
+      background: rgba(34,197,94,0.12);
+      color: #22C55E;
+      border: 1px solid rgba(34,197,94,0.25);
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 32px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Política de Privacidad</h1>
+    <p class="subtitle">Change Your Life in Community</p>
+    <span class="badge">Última actualización: Mayo 2026</span>
+
+    <p>
+      Esta Política de Privacidad describe cómo <strong>Change Your Life in Community</strong>
+      ("la App", "nosotros") recopila, usa y protege la información cuando usás nuestra
+      aplicación para Android. Al usar la App, aceptás las prácticas descritas en este
+      documento.
+    </p>
+
+    <h2>1. Información que recopilamos</h2>
+    <div class="card">
+      <p><strong>Información que vos ingresás:</strong></p>
+      <ul>
+        <li>Tu nombre y apellido (para identificarte en las solicitudes de desbloqueo)</li>
+        <li>Nombre, dirección de email y número de WhatsApp de tu amigo responsable</li>
+        <li>Lista de aplicaciones que elegís bloquear</li>
+        <li>Preferencias de duración del bloqueo y categorías de reemplazo</li>
+      </ul>
+    </div>
+    <div class="card">
+      <p><strong>Información recopilada automáticamente:</strong></p>
+      <ul>
+        <li>Lista de aplicaciones instaladas en tu dispositivo (solo para mostrarte cuáles podés bloquear)</li>
+        <li>Aplicación en primer plano (para activar el bloqueo en el momento correcto)</li>
+        <li>Estado del Servicio de Accesibilidad</li>
+      </ul>
+    </div>
+
+    <h2>2. Cómo usamos la información</h2>
+    <ul>
+      <li>Enviar notificaciones a tu amigo responsable cuando solicitás desbloquear una app (vía email o WhatsApp)</li>
+      <li>Permitir que tu amigo apruebe o rechace la solicitud de desbloqueo</li>
+      <li>Mostrar sugerencias de actividades de reemplazo personalizadas</li>
+      <li>Mantener el historial de bloqueos en tu dispositivo</li>
+    </ul>
+    <p>
+      <strong>No usamos tu información para publicidad, seguimiento de terceros ni análisis
+      comerciales.</strong>
+    </p>
+
+    <h2>3. Servicios de terceros</h2>
+    <div class="card">
+      <p><strong>Supabase</strong> (backend y base de datos): almacena temporalmente los datos
+      de solicitudes de desbloqueo para sincronización entre dispositivos.</p>
+      <p style="margin-top:8px">
+        Política de privacidad: <a href="https://supabase.com/privacy" target="_blank">supabase.com/privacy</a>
+      </p>
+    </div>
+    <div class="card">
+      <p><strong>Twilio</strong> (mensajería WhatsApp): utilizado para enviar notificaciones
+      de solicitud de desbloqueo al amigo responsable vía WhatsApp.</p>
+      <p style="margin-top:8px">
+        Política de privacidad: <a href="https://www.twilio.com/legal/privacy" target="_blank">twilio.com/legal/privacy</a>
+      </p>
+    </div>
+
+    <h2>4. Servicio de Accesibilidad</h2>
+    <p>
+      La App utiliza el <strong>Servicio de Accesibilidad de Android</strong> exclusivamente
+      para detectar cuándo abrís una aplicación que elegiste bloquear y mostrar la pantalla
+      de pausa. Este servicio <strong>no lee contenido de otras apps</strong>, no registra
+      lo que escribís y no recopila datos de pantalla.
+    </p>
+    <p>
+      El uso del Servicio de Accesibilidad es <strong>la funcionalidad principal</strong>
+      de la App y no puede reemplazarse por una alternativa menos intrusiva.
+    </p>
+
+    <h2>5. Permiso de Uso de Aplicaciones (Usage Stats)</h2>
+    <p>
+      La App solicita permiso para acceder a las estadísticas de uso del sistema operativo.
+      Este permiso se usa únicamente para identificar qué aplicación está activa en primer
+      plano y activar el bloqueo cuando corresponde. No recopilamos ni enviamos este
+      historial de uso a ningún servidor.
+    </p>
+
+    <h2>6. Almacenamiento de datos</h2>
+    <ul>
+      <li><strong>Local (dispositivo):</strong> configuración, lista de bloques, historial. Se almacena con SharedPreferences de Android y permanece en tu dispositivo.</li>
+      <li><strong>Servidor (Supabase):</strong> solicitudes de desbloqueo activas. Se eliminan automáticamente cuando el bloqueo vence.</li>
+      <li><strong>No vendemos ni compartimos tus datos</strong> con terceros más allá de los servicios mencionados.</li>
+    </ul>
+
+    <h2>7. Retención de datos</h2>
+    <p>
+      Los datos locales permanecen hasta que los borrés manualmente (opción "Reiniciar
+      configuración" en la App) o desintalés la App. Los datos en el servidor se eliminan
+      automáticamente al expirar el período de bloqueo.
+    </p>
+
+    <h2>8. Menores de edad</h2>
+    <p>
+      La App no está dirigida a menores de 13 años. No recopilamos intencionalmente
+      información de menores. Si sos padre o tutor y creés que tu hijo proporcionó
+      información personal, contactanos para eliminarla.
+    </p>
+
+    <h2>9. Cambios a esta política</h2>
+    <p>
+      Podemos actualizar esta Política de Privacidad ocasionalmente. Te notificaremos
+      mediante una actualización de la App. Te recomendamos revisar esta página
+      periódicamente.
+    </p>
+
+    <h2>10. Contacto</h2>
+    <p>
+      Si tenés preguntas sobre esta Política de Privacidad, podés contactarnos en:<br />
+      <a href="mailto:changeyourlifecommunity@gmail.com">changeyourlifecommunity@gmail.com</a>
+    </p>
+
+    <hr style="border-color: rgba(255,255,255,0.07); margin: 40px 0;" />
+    <p style="font-size:12px; color: #374151; text-align:center;">
+      © 2026 Change Your Life in Community. Todos los derechos reservados.
+    </p>
+  </div>
+</body>
+</html>

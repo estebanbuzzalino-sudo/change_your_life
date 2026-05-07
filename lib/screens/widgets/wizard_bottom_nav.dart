@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
 
 class WizardNavItem {
   final String title;
@@ -25,15 +26,11 @@ class WizardBottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, -2),
-          ),
-        ],
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(
+          top: BorderSide(color: AppColors.border, width: 1),
+        ),
       ),
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
       child: Row(
@@ -41,12 +38,15 @@ class WizardBottomNav extends StatelessWidget {
           final item = items[index];
           final isActive = index == currentIndex;
           final isCompleted = index < currentIndex;
+
           final color = isActive
-              ? Colors.blue.shade700
-              : (isCompleted ? Colors.green.shade700 : Colors.black45);
+              ? AppColors.primary
+              : (isCompleted ? AppColors.primaryMuted : AppColors.textMuted);
           final background = isActive
-              ? Colors.blue.shade50
-              : (isCompleted ? Colors.green.shade50 : Colors.transparent);
+              ? AppColors.primary.withValues(alpha: 0.12)
+              : (isCompleted
+                  ? AppColors.primaryMuted.withValues(alpha: 0.08)
+                  : Colors.transparent);
 
           return Expanded(
             child: Padding(
@@ -58,7 +58,10 @@ class WizardBottomNav extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                   onTap: onTap == null ? null : () => onTap!(index),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 8,
+                      horizontal: 4,
+                    ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -70,9 +73,11 @@ class WizardBottomNav extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 11,
                             color: color,
-                            fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                            fontWeight: isActive
+                                ? FontWeight.w700
+                                : FontWeight.w500,
                           ),
                         ),
                       ],

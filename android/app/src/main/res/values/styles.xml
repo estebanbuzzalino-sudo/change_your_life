@@ -19,4 +19,14 @@
     <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <item name="android:windowBackground">?android:colorBackground</item>
     </style>
+
+    <style name="BlockActivityTheme" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">#080B14</item>
+        <item name="android:statusBarColor">#080B14</item>
+        <item name="android:navigationBarColor">#080B14</item>
+        <item name="colorPrimary">#22C55E</item>
+        <item name="colorAccent">#22C55E</item>
+        <item name="android:textColorPrimary">#F1F5F9</item>
+        <item name="android:textColorSecondary">#94A3B8</item>
+    </style>
 </resources>

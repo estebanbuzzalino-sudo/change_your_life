@@ -9,8 +9,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/app_block.dart';
+import '../theme/app_theme.dart';
+import '../services/accessibility_service_status.dart';
 import '../services/unlock_grants_sync_service.dart';
 import 'friend_screen.dart';
+import 'stats_screen.dart';
 import 'block_screen.dart';
 import 'debug_sync_diagnostics_screen.dart';
 import 'pending_requests_screen.dart';
@@ -323,6 +326,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   DateTime? _lastSyncAt;
   bool? _lastSyncOk;
   List<UnlockGrantActiveGrant> _lastSyncActiveGrants = [];
+  final AccessibilityServiceStatus _accessibilityStatus = AccessibilityServiceStatus();
+  bool _accessibilityEnabled = true;
+
+  // Home screen navigation
+  bool _showingWizard = false;
+  int _homeTabIndex = 0; // 0 = Inicio, 1 = Ancla, 2 = Vos
 
   @override
   void initState() {
@@ -331,6 +340,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _loadSavedData();
     _startTemporaryUnlockTimer();
     _setupDeepLinks();
+    _checkAccessibilityServiceStatus();
   }
 
   @override
@@ -346,6 +356,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(_syncRemoteUnlockGrants(trigger: 'app_foreground'));
+      _checkAccessibilityServiceStatus();
+    }
+  }
+
+  Future<void> _checkAccessibilityServiceStatus() async {
+    final enabled = await _accessibilityStatus.isEnabled();
+    if (!mounted) return;
+    if (_accessibilityEnabled != enabled) {
+      setState(() {
+        _accessibilityEnabled = enabled;
+      });
     }
   }
 
@@ -799,8 +820,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _loadInstalledPackagesForWizard() async {
     try {
       final installedApps = await InstalledApps.getInstalledApps(
-        excludeSystemApps: true,
-        excludeNonLaunchableApps: true,
+        excludeSystemApps: false,
+        excludeNonLaunchableApps: false,
         withIcon: false,
       );
 
@@ -825,6 +846,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _installedAppPackages
           ..clear()
           ..addAll(packages);
+        // Auto-deselect apps that are not installed on this device
+        selectedApps.removeWhere((app) {
+          final pkg = (app['packageName'] ?? '').trim();
+          return pkg.isNotEmpty && !packages.contains(pkg);
+        });
       });
 
       if (changed && mounted) {
@@ -1147,7 +1173,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   const SizedBox(height: 6),
                   const Text(
                     'Toca una opcion para abrirla en Play Store y usarla ahora.',
-                    style: TextStyle(color: Colors.black54),
+                    style: TextStyle(color: AppColors.textSecondary),
                   ),
                   const SizedBox(height: 10),
                   ...sortedIdeas.map(
@@ -1162,8 +1188,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: const Color(0xFFD5D8E0)),
-                              color: Colors.white,
+                              border: Border.all(color: AppColors.borderStrong),
+                              color: AppColors.card,
                             ),
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1172,10 +1198,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   width: 42,
                                   height: 42,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFEFF3FF),
+                                    color: AppColors.primary.withValues(alpha: 0.12),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
-                                  child: Icon(idea.icon, color: const Color(0xFF3558D6)),
+                                  child: Icon(idea.icon, color: AppColors.primary),
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(
@@ -1207,7 +1233,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                 style: TextStyle(
                                                   fontSize: 11,
                                                   fontWeight: FontWeight.w700,
-                                                  color: Color(0xFF1E7B3A),
+                                                  color: AppColors.primary,
                                                 ),
                                               ),
                                             ),
@@ -1216,13 +1242,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                       const SizedBox(height: 4),
                                       Text(
                                         idea.action,
-                                        style: const TextStyle(color: Colors.black87),
+                                        style: const TextStyle(color: AppColors.textSecondary),
                                       ),
                                       const SizedBox(height: 6),
                                       const Text(
                                         'Abrir en Play Store',
                                         style: TextStyle(
-                                          color: Color(0xFF3558D6),
+                                          color: AppColors.primary,
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
@@ -1280,6 +1306,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         .toList();
 
     await prefs.setString('blocked_packages_csv', packages.join(','));
+
+    final endDates = activeBlocks
+        .where((block) => block.packageName.isNotEmpty)
+        .map((block) =>
+            '${block.packageName}|${block.endDate.millisecondsSinceEpoch}')
+        .join(',');
+    await prefs.setString('blocked_end_dates_csv', endDates);
   }
 
   Future<void> _openFriendScreen() async {
@@ -1662,6 +1695,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     await prefs.remove(_notificationModeKey);
     await prefs.remove('activeBlocks');
     await prefs.remove('blocked_packages_csv');
+    await prefs.remove('blocked_end_dates_csv');
     await prefs.remove('pending_unlock_requests_csv');
     await prefs.remove('temporary_unlocked_packages_csv');
     await prefs.remove(_ignoredUnlockGrantsKey);
@@ -1701,15 +1735,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           packageName: block.packageName,
           friendName: block.friendName,
           endDate: block.endDate,
+          replacementCategories: _selectedReplacementIds.toList(),
         ),
       ),
     );
-  }
-
-  String _formatDate(DateTime value) {
-    final day = value.day.toString().padLeft(2, '0');
-    final month = value.month.toString().padLeft(2, '0');
-    return '$day/$month/${value.year}';
   }
 
   String _formatDateTime(DateTime value) {
@@ -1856,57 +1885,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return parts.join(' ');
   }
 
-  Widget _buildSectionHeader({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-  }) {
-    return Row(
-      children: [
-        Icon(icon, size: 22),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: const TextStyle(fontSize: 13, color: Colors.black54),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEmptyStateCard({
-    required IconData icon,
-    required String message,
-  }) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            Icon(icon, color: Colors.black54),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                message,
-                style: const TextStyle(color: Colors.black87),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   List<_ReplacementOption> get _selectedReplacementOptions {
     return _replacementOptions
@@ -1915,88 +1893,144 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildStepOne() {
-    final extraSelectedApps = selectedApps.where((app) {
-      final packageName = (app['packageName'] ?? '').trim();
-      return !_popularBlockApps.any((option) => option.packageName == packageName);
-    }).toList();
+    // Brand colors for the grid icons
+    const Map<String, List<Color>> appColors = {
+      'com.instagram.android': [Color(0xFFE1306C), Color(0xFF833AB4)],
+      'com.facebook.katana':   [Color(0xFF1877F2), Color(0xFF1877F2)],
+      'com.zhiliaoapp.musically': [Color(0xFF010101), Color(0xFF69C9D0)],
+      'com.twitter.android':   [Color(0xFF000000), Color(0xFF000000)],
+      'com.google.android.youtube': [Color(0xFFFF0000), Color(0xFFCC0000)],
+    };
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
-      child: WizardStepShell(
-        stepLabel: 'Paso 1 de 3',
-        title: 'Elegi que apps queres bloquear',
-        subtitle: 'Elegi las apps que queres pausar',
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            ..._popularBlockApps.map((option) {
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '¿Qué apps te gastan el día?',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary,
+              letterSpacing: -0.5,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Tocá las que querés bloquear.',
+            style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 16),
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 1.1,
+            children: _popularBlockApps.map((option) {
               final isSelected = _isAppSelected(option.packageName);
               final isAvailable = _isPopularAppAvailable(option);
               final activeBlock = _activeBlockForPackage(option.packageName);
               final isAlreadyBlocked = activeBlock != null;
-              final blockedSubtitle = isAlreadyBlocked
-                  ? 'Ya bloqueada (${_remainingBlockTimeFrom(activeBlock!.endDate)})'
-                  : '';
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: SelectableOptionCard(
-                  title: option.appName,
-                  subtitle: isAlreadyBlocked
-                      ? blockedSubtitle
-                      : (isAvailable
-                            ? 'Disponible en este dispositivo'
-                            : 'No instalada en este dispositivo'),
-                  icon: option.icon,
-                  selected: isSelected,
-                  enabled: !isAlreadyBlocked && (isAvailable || isSelected),
-                  onTap: () => _togglePopularBlockApp(option),
-                ),
-              );
-            }),
-            const SizedBox(height: 12),
-            if (selectedApps.isEmpty)
-              _buildEmptyStateCard(
-                icon: Icons.touch_app_rounded,
-                message: 'Selecciona una o mas apps para continuar.',
-              )
-            else
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Apps seleccionadas (${selectedApps.length})',
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: selectedApps.map((app) {
-                          final packageName = (app['packageName'] ?? '').trim();
-                          final appName = _displayNameForPackage(packageName);
-                          return Chip(label: Text(appName));
-                        }).toList(),
+              final isEnabled = !isAlreadyBlocked && isAvailable;
+              final colors = appColors[option.packageName] ?? [AppColors.surface, AppColors.surface];
+              final blockedLabel = isAlreadyBlocked
+                  ? 'Ya bloqueada'
+                  : (isAvailable ? 'Tocar para sumar' : 'No instalada');
+
+              return GestureDetector(
+                onTap: isEnabled ? () => _togglePopularBlockApp(option) : null,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  decoration: BoxDecoration(
+                    color: AppColors.card,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: isSelected
+                          ? AppColors.orange
+                          : (isEnabled ? AppColors.border : AppColors.border),
+                      width: isSelected ? 2 : 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.06),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
                       ),
                     ],
                   ),
-                ),
-              ),
-            if (extraSelectedApps.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text(
-                    'Tambien tenes seleccionadas ${extraSelectedApps.length} app(s) adicionales desde la lista completa.',
+                  child: Opacity(
+                    opacity: isEnabled ? 1.0 : 0.38,
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: colors,
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(option.icon, color: Colors.white, size: 20),
+                              ),
+                              const Spacer(),
+                              if (isSelected)
+                                Container(
+                                  width: 22,
+                                  height: 22,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.orange,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.check, color: Colors.white, size: 14),
+                                ),
+                            ],
+                          ),
+                          const Spacer(),
+                          Text(
+                            option.appName,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            isSelected ? 'Se va a bloquear' : blockedLabel,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isSelected
+                                  ? AppColors.orange
+                                  : AppColors.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              );
+            }).toList(),
+          ),
+          if (selectedApps.isEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Seleccioná al menos una app para continuar.',
+              style: TextStyle(fontSize: 13, color: AppColors.textMuted),
+              textAlign: TextAlign.center,
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -2007,9 +2041,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final sliderValue = selectedValue > maxValue ? maxValue : selectedValue;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
       child: WizardStepShell(
-        stepLabel: 'Paso 2 de 3',
+        stepLabel: null,
         title: 'Elegi el tiempo y el amigo responsable',
         subtitle: 'Defini cuanto tiempo queres bloquearlas',
         child: Column(
@@ -2017,15 +2051,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           children: [
             Card(
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const Text(
-                      'Duracion',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                      'Duración',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 8),
                     SegmentedButton<String>(
                       segments: const [
                         ButtonSegment<String>(
@@ -2047,8 +2081,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         await _saveData();
                       },
                     ),
-                    const SizedBox(height: 16),
-                    Text('Duracion elegida: $durationText'),
+                    const SizedBox(height: 4),
+                    Text('Duración: $durationText', style: const TextStyle(fontSize: 13)),
                     Slider(
                       value: sliderValue,
                       min: 1,
@@ -2066,51 +2100,62 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
-            ElevatedButton.icon(
-              onPressed: _openFriendScreen,
-              icon: const Icon(Icons.group_rounded),
-              label: const Text('Elegir amigo responsable'),
-            ),
             const SizedBox(height: 10),
             if (_hasFriendConfigured)
               Card(
                 child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+                  child: Row(
                     children: [
-                      const Text(
-                        'Amigo responsable',
-                        style: TextStyle(fontWeight: FontWeight.w700),
+                      const Icon(Icons.person_rounded, size: 22),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              friendName ?? '',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                              ),
+                            ),
+                            if ((friendEmail ?? '').isNotEmpty)
+                              Text(
+                                friendEmail ?? '',
+                                style: const TextStyle(fontSize: 12),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 6),
-                      Text('Solicitante: ${requesterName ?? ''}'),
-                      Text('Nombre: ${friendName ?? ''}'),
-                      Text('Email: ${friendEmail ?? ''}'),
-                      if ((friendWhatsappE164 ?? '').trim().isNotEmpty)
-                        Text('WhatsApp: ${friendWhatsappE164 ?? ''}'),
+                      TextButton(
+                        onPressed: _openFriendScreen,
+                        child: const Text('Cambiar'),
+                      ),
                     ],
                   ),
                 ),
               )
-            else
-              _buildEmptyStateCard(
-                icon: Icons.person_add_alt_1_rounded,
-                message: 'Falta elegir un amigo responsable para continuar.',
+            else ...[
+              ElevatedButton.icon(
+                onPressed: _openFriendScreen,
+                icon: const Icon(Icons.group_rounded),
+                label: const Text('Elegir amigo responsable'),
               ),
-            const SizedBox(height: 10),
+            ],
+            const SizedBox(height: 8),
             Card(
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
                       'Canal de solicitud',
-                      style: TextStyle(fontWeight: FontWeight.w700),
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 8),
                     SegmentedButton<String>(
                       segments: const [
                         ButtonSegment<String>(
@@ -2137,7 +2182,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       _requiresWhatsappChannel
                           ? 'Se envia por WhatsApp automaticamente.'
                           : 'Se envia por email automaticamente.',
-                      style: const TextStyle(color: Colors.black54),
+                      style: const TextStyle(color: AppColors.textSecondary),
                     ),
                     if (_requiresWhatsappChannel) ...[
                       const SizedBox(height: 8),
@@ -2145,15 +2190,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         Text(
                           'WhatsApp configurado: ${friendWhatsappE164 ?? ''}',
                           style: const TextStyle(
-                            color: Color(0xFF1E7B3A),
+                            color: AppColors.primary,
                             fontWeight: FontWeight.w600,
                           ),
                         )
                       else
                         const Text(
-                          'Falta WhatsApp valido del amigo (formato +5491112345678). Editalo en \"Elegir amigo responsable\".',
+                          'Falta WhatsApp valido del amigo (formato +5491112345678). Editalo en "Elegir amigo responsable".',
                           style: TextStyle(
-                            color: Color(0xFFB3261E),
+                            color: AppColors.error,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -2170,71 +2215,41 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Widget _buildStepThree() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
-      child: WizardStepShell(
-        stepLabel: 'Paso 3 de 3',
-        title: 'Elegi con que queres reemplazar ese tiempo',
-        subtitle: 'Elegi categorias para personalizar tus sugerencias y abrir opciones concretas',
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Card(
-              color: Colors.blue.shade50,
-              child: const Padding(
-                padding: EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Mientras tus redes estan bloqueadas, te sugerimos apps y actividades para aprovechar mejor ese tiempo.',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    SizedBox(height: 6),
-                    Text(
-                      'Estas opciones funcionan como reemplazos positivos: bienestar, aprendizaje, musica y juegos didacticos.',
-                    ),
-                    SizedBox(height: 6),
-                    Text(
-                      'Cuando elegis una categoria, la guardamos en tu plan y ademas podes abrir apps sugeridas al instante.',
-                    ),
-                  ],
-                ),
-              ),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'En vez de scrollear,\n¿qué te gustaría hacer?',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.5,
             ),
-            const SizedBox(height: 10),
-            ..._replacementOptions.map((option) {
-              final isSelected = _selectedReplacementIds.contains(option.id);
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: SelectableOptionCard(
-                  title: option.title,
-                  subtitle: '${option.subtitle} Toca para ver apps sugeridas.',
-                  icon: option.icon,
-                  selected: isSelected,
-                  onTap: () {
-                    _toggleReplacementOption(option.id);
-                    _showReplacementIdeas(option);
-                  },
-                ),
-              );
-            }),
-            const SizedBox(height: 8),
-            if (_selectedReplacementIds.isEmpty)
-              _buildEmptyStateCard(
-                icon: Icons.lightbulb_outline_rounded,
-                message: 'Este paso es opcional, pero puede ayudarte a sostener el cambio.',
-              )
-            else
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text(
-                    'Excelente, elegiste ${_selectedReplacementIds.length} alternativa(s) para reemplazar ese tiempo.',
-                  ),
-                ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Opcional — elegí categorías para personalizar tus sugerencias.',
+            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 14),
+          ..._replacementOptions.map((option) {
+            final isSelected = _selectedReplacementIds.contains(option.id);
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: SelectableOptionCard(
+                title: option.title,
+                subtitle: option.subtitle,
+                icon: option.icon,
+                selected: isSelected,
+                onTap: () {
+                  _toggleReplacementOption(option.id);
+                  _showReplacementIdeas(option);
+                },
               ),
-          ],
-        ),
+            );
+          }),
+        ],
       ),
     );
   }
@@ -2275,17 +2290,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Card(
-              color: isBlockingActive ? Colors.green.shade50 : Colors.orange.shade50,
+              color: isBlockingActive
+                  ? AppColors.primary.withValues(alpha: 0.10)
+                  : AppColors.orange.withValues(alpha: 0.10),
               child: ListTile(
                 leading: Icon(
                   isBlockingActive ? Icons.verified_rounded : Icons.warning_amber_rounded,
-                  color: isBlockingActive ? Colors.green.shade700 : Colors.orange.shade700,
+                  color: isBlockingActive ? AppColors.primary : AppColors.orange,
                 ),
                 title: Text(
                   isBlockingActive ? 'Bloqueo activo' : 'Bloqueo pendiente',
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
-                    color: isBlockingActive ? Colors.green.shade800 : Colors.orange.shade800,
+                    color: isBlockingActive ? AppColors.primaryLight : AppColors.orangeLight,
                   ),
                 ),
                 subtitle: Text(remainingOverview),
@@ -2381,9 +2398,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         );
                         final isTemporarilyUnlocked = activeTemporaryUnlock != null;
                         final timeLabel = isTemporarilyUnlocked
-                            ? (_isPermanentUnlock(activeTemporaryUnlock!)
+                            ? (_isPermanentUnlock(activeTemporaryUnlock)
                                   ? 'Desbloqueada'
-                                  : _temporaryUnlockLabel(activeTemporaryUnlock!))
+                                  : _temporaryUnlockLabel(activeTemporaryUnlock))
                             : _remainingBlockTimeFrom(block.endDate);
                         final statusLabel = isTemporarilyUnlocked
                             ? 'Desbloqueada temporalmente'
@@ -2397,7 +2414,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     ? Icons.lock_open_rounded
                                     : Icons.lock_clock_rounded,
                                 size: 18,
-                                color: isTemporarilyUnlocked ? Colors.teal.shade700 : null,
+                                color: isTemporarilyUnlocked ? AppColors.primaryLight : null,
                               ),
                               const SizedBox(width: 8),
                               Expanded(
@@ -2411,8 +2428,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                         fontSize: 12,
                                         fontWeight: FontWeight.w600,
                                         color: isTemporarilyUnlocked
-                                            ? Colors.teal.shade700
-                                            : Colors.black54,
+                                            ? AppColors.primaryLight
+                                            : AppColors.textMuted,
                                       ),
                                     ),
                                   ],
@@ -2485,7 +2502,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     const SizedBox(height: 6),
                     const Text(
                       'Aqui ves lo que tu amigo aun debe aprobar y cualquier desbloqueo temporal ya activo.',
-                      style: TextStyle(color: Colors.black54),
+                      style: TextStyle(color: AppColors.textSecondary),
                     ),
                     const SizedBox(height: 10),
                     OutlinedButton.icon(
@@ -2550,6 +2567,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
               ),
             ),
+            if (activeBlocks.any((b) => b.endDate.isAfter(DateTime.now()))) ...[
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () {
+                  final block = activeBlocks.firstWhere(
+                    (b) => b.endDate.isAfter(DateTime.now()),
+                  );
+                  _openBlockScreen(block);
+                },
+                icon: const Icon(Icons.preview_rounded),
+                label: const Text('Ver pantalla de pausa'),
+              ),
+            ],
           ],
         ),
       ),
@@ -2562,8 +2592,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         children: [
           Expanded(
             child: OutlinedButton(
-              onPressed: _goPreviousWizardStep,
-              child: const Text('Volver'),
+              onPressed: _showingWizard ? _closeWizard : _goPreviousWizardStep,
+              child: Text(_showingWizard ? 'Listo ✓' : 'Volver'),
             ),
           ),
           const SizedBox(width: 10),
@@ -2636,16 +2666,138 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (isLoading) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
-    }
+  static const List<String> _wizardStepTitles = [
+    'Apps a bloquear',
+    'Tiempo y amigo',
+    'Reemplazos',
+    'Resumen',
+  ];
 
+  Widget _buildWizardProgressBar() {
+    final total = _wizardStepTitles.length;
+    final current = _currentWizardIndex.clamp(0, total - 1);
+    final progress = (current + 1) / total;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: List.generate(total, (i) {
+              final isDone = i < current;
+              final isActive = i == current;
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: isActive ? 10 : 8,
+                    height: isActive ? 10 : 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isDone || isActive
+                          ? AppColors.primary
+                          : AppColors.border,
+                    ),
+                  ),
+                  if (i < total - 1)
+                    Container(
+                      width: 32,
+                      height: 2,
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      color: isDone
+                          ? AppColors.primaryMuted
+                          : AppColors.border,
+                    ),
+                ],
+              );
+            }),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                _wizardStepTitles[current],
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primary,
+                ),
+              ),
+              Text(
+                'Paso ${current + 1} de $total',
+                style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+              ),
+            ],
+          ),
+        ),
+        LinearProgressIndicator(
+          value: progress,
+          minHeight: 3,
+          backgroundColor: AppColors.border,
+          valueColor: const AlwaysStoppedAnimation(AppColors.primary),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAccessibilityWarningBanner() {
+    return Material(
+      color: AppColors.error,
+      child: InkWell(
+        onTap: () async {
+          await _accessibilityStatus.openSettings();
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: const [
+              Icon(Icons.warning_amber_rounded, color: Colors.white, size: 22),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'El servicio de accesibilidad está desactivado. Las apps no se bloquearán. Tocá aquí para activarlo.',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Icon(Icons.arrow_forward_ios, color: Colors.white, size: 14),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─── Wizard open / close ────────────────────────────────────────────────────
+
+  void _openWizard() {
+    setState(() {
+      _showingWizard = true;
+      _currentWizardIndex = 0;
+    });
+    if (_wizardPageController.hasClients) {
+      _wizardPageController.jumpToPage(0);
+    }
+  }
+
+  void _closeWizard() {
+    setState(() {
+      _showingWizard = false;
+    });
+  }
+
+  // ─── Wizard scaffold (original 4-step flow) ──────────────────────────────
+
+  Widget _buildWizardScaffold() {
     const navItems = [
       WizardNavItem(title: 'Bloqueo', icon: Icons.block_rounded),
       WizardNavItem(title: 'Tiempo', icon: Icons.schedule_rounded),
@@ -2654,48 +2806,44 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     ];
 
     return Scaffold(
+      backgroundColor: const Color(0xFFFDF6EC),
       appBar: AppBar(
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: Image.asset(
-                'assets/logo/app_logo.png',
-                width: 28,
-                height: 28,
-                fit: BoxFit.cover,
-              ),
-            ),
-            const SizedBox(width: 10),
-            const Flexible(
-              child: Text('Change Your Life in Community'),
-            ),
-          ],
+        backgroundColor: const Color(0xFFFDF6EC),
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.close_rounded),
+          onPressed: _closeWizard,
+          tooltip: 'Cerrar',
         ),
-        actions: [
-          if (kDebugMode)
-            IconButton(
-              onPressed: _openDebugDiagnosticsScreen,
-              icon: const Icon(Icons.bug_report_rounded),
-              tooltip: 'Diagnostico sync',
-            ),
-        ],
+        title: const Text(
+          'Nuevo bloqueo',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+        ),
+        centerTitle: true,
       ),
-      body: PageView(
-        controller: _wizardPageController,
-        physics: const NeverScrollableScrollPhysics(),
-        onPageChanged: (index) {
-          if (!mounted) return;
-          setState(() {
-            _currentWizardIndex = index;
-          });
-        },
+      body: Column(
         children: [
-          _buildStepOne(),
-          _buildStepTwo(),
-          _buildStepThree(),
-          _buildSummaryStep(),
+          if (!_accessibilityEnabled) _buildAccessibilityWarningBanner(),
+          _buildWizardProgressBar(),
+          Expanded(
+            child: PageView(
+              controller: _wizardPageController,
+              physics: const NeverScrollableScrollPhysics(),
+              onPageChanged: (index) {
+                if (!mounted) return;
+                setState(() {
+                  _currentWizardIndex = index;
+                });
+              },
+              children: [
+                _buildStepOne(),
+                _buildStepTwo(),
+                _buildStepThree(),
+                _buildSummaryStep(),
+              ],
+            ),
+          ),
         ],
       ),
       bottomNavigationBar: SafeArea(
@@ -2710,14 +2858,1136 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             WizardBottomNav(
               items: navItems,
               currentIndex: _currentWizardIndex,
-              onTap: (index) {
-                _goToWizardStep(index);
-              },
+              onTap: _goToWizardStep,
             ),
           ],
         ),
       ),
     );
+  }
+
+  // ─── Home scaffold (Sunrise design) ─────────────────────────────────────
+
+  Widget _buildHomeScaffold() {
+    final hasBlocks = activeBlocks.any((b) => b.endDate.isAfter(DateTime.now()));
+    final isGradientBg = _homeTabIndex == 0 && !hasBlocks;
+
+    Widget body;
+    switch (_homeTabIndex) {
+      case 1:
+        body = _buildAnclaTab();
+        break;
+      case 2:
+        body = _buildVosTab();
+        break;
+      default:
+        body = hasBlocks ? _buildDashboardView() : _buildEmptyHomeView();
+    }
+
+    return Scaffold(
+      backgroundColor: isGradientBg ? const Color(0xFFFF5B3A) : const Color(0xFFFDF6EC),
+      body: body,
+      bottomNavigationBar: _buildHomeBottomNav(isGradientBg),
+    );
+  }
+
+  // ─── Empty home (no blocks) ──────────────────────────────────────────────
+
+  Widget _buildEmptyHomeView() {
+    final userName = (requesterName ?? '').trim();
+    final displayName = userName.isNotEmpty ? userName.toUpperCase() : 'VOS';
+    final initials = userName.isNotEmpty ? userName[0].toUpperCase() : '?';
+
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFFFF5B3A), Color(0xFFFF8C42), Color(0xFFFFB444)],
+          stops: [0.0, 0.55, 1.0],
+        ),
+      ),
+      child: SafeArea(
+        child: Column(
+          children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 20, 22, 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'HOLA, $displayName',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.white.withValues(alpha: 0.85),
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                      const Text(
+                        'Unscroll',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.5,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                    child: Center(
+                      child: Text(
+                        initials,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Center: shield + text + step badges
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 130,
+                    height: 130,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.18),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.25),
+                        width: 2,
+                      ),
+                      borderRadius: BorderRadius.circular(40),
+                    ),
+                    child: const Icon(Icons.shield_rounded, size: 56, color: Colors.white),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Tu primer\nbloqueo te espera.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.5,
+                      height: 1.1,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 26),
+                    child: Text(
+                      'Elegí qué apps querés silenciar y por cuánto tiempo. Tu ancla recibirá el pedido si querés desbloquear antes.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.white.withValues(alpha: 0.92),
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildEmptyStepBadge('1', 'Elegí apps'),
+                      const SizedBox(width: 18),
+                      _buildEmptyStepBadge('2', 'Confirmá tiempo'),
+                      const SizedBox(width: 18),
+                      _buildEmptyStepBadge('3', 'Bloqueo activo'),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // CTA button
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 0, 22, 16),
+              child: GestureDetector(
+                onTap: _openWizard,
+                child: Container(
+                  width: double.infinity,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.22),
+                        blurRadius: 30,
+                        offset: const Offset(0, 14),
+                      ),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.lock_rounded, size: 18, color: Color(0xFFFF5B3A)),
+                      SizedBox(width: 10),
+                      Text(
+                        'Crear primer bloqueo',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                          color: Color(0xFFFF5B3A),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyStepBadge(String n, String label) {
+    return Column(
+      children: [
+        Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.22),
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: Text(
+              n,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            color: Colors.white.withValues(alpha: 0.95),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─── Dashboard view (with active blocks) ────────────────────────────────
+
+  Widget _buildDashboardView() {
+    final now = DateTime.now();
+    final activeNow = activeBlocks.where((b) => b.endDate.isAfter(now)).toList();
+
+    // Time saved calculation
+    String timeSaved = '0h';
+    String timeSavedSub = 'Empezá tu primer bloqueo hoy';
+    if (activeNow.isNotEmpty) {
+      DateTime? earliest;
+      for (final b in activeNow) {
+        if (earliest == null || b.startDate.isBefore(earliest)) {
+          earliest = b.startDate;
+        }
+      }
+      if (earliest != null) {
+        final diff = now.difference(earliest);
+        if (diff.inDays >= 1) {
+          timeSaved = '${diff.inDays}d ${diff.inHours.remainder(24)}h';
+        } else if (diff.inHours >= 1) {
+          timeSaved = '${diff.inHours}h ${diff.inMinutes.remainder(60)}m';
+        } else {
+          timeSaved = '${diff.inMinutes}m';
+        }
+        final appNames = activeNow.take(2).map((b) => b.appName).join(' ni ');
+        timeSavedSub = 'sin abrir $appNames';
+      }
+    }
+
+    final userName = (requesterName ?? '').trim();
+    final displayName = userName.isNotEmpty ? userName.toUpperCase() : 'VOS';
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Hero + overlapping card
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // Gradient hero header
+              Container(
+                clipBehavior: Clip.antiAlias,
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFFFF5B3A), Color(0xFFFF8C42), Color(0xFFFFB444)],
+                    stops: [0.0, 0.6, 1.0],
+                  ),
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(32),
+                    bottomRight: Radius.circular(32),
+                  ),
+                ),
+                child: Stack(
+                  children: [
+                    // Decorative circle
+                    Positioned(
+                      right: -40,
+                      top: -40,
+                      child: Container(
+                        width: 160,
+                        height: 160,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white12,
+                        ),
+                      ),
+                    ),
+                    // Content
+                    SafeArea(
+                      bottom: false,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(22, 24, 22, 72),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'HOLA, $displayName',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 1.2,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.18),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Icon(
+                                    Icons.notifications_rounded,
+                                    color: Colors.white,
+                                    size: 18,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+                            Text(
+                              timeSaved,
+                              style: const TextStyle(
+                                fontSize: 42,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -1.5,
+                                height: 0.95,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              timeSavedSub,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.white.withValues(alpha: 0.9),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // "Crear nuevo bloqueo" card — overlaps hero
+              Positioned(
+                left: 18,
+                right: 18,
+                bottom: -28,
+                child: _buildCreateBlockCard(),
+              ),
+            ],
+          ),
+
+          // Space for the overflowing card
+          const SizedBox(height: 44),
+
+          // Accessibility warning card
+          if (!_accessibilityEnabled)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+              child: _buildAccessibilityWarningCard(),
+            ),
+
+          // "Bloqueos vivos" section
+          if (activeNow.isNotEmpty) ...[
+            const Padding(
+              padding: EdgeInsets.fromLTRB(22, 0, 22, 10),
+              child: Text(
+                'BLOQUEOS VIVOS',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Color(0xFF7A5C50),
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.0,
+                ),
+              ),
+            ),
+            ...activeNow.map(
+              (block) => Padding(
+                padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
+                child: _buildActiveBlockCardHome(block),
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCreateBlockCard() {
+    return GestureDetector(
+      onTap: _openWizard,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x26FF5B3A),
+              blurRadius: 30,
+              offset: Offset(0, 14),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              width: 50,
+              height: 50,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFFFF5B3A), Color(0xFFFF8C42)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.all(Radius.circular(16)),
+              ),
+              child: const Icon(Icons.add_rounded, size: 22, color: Colors.white),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Crear nuevo bloqueo',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                      color: Color(0xFF1F1410),
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    '3 pasos · menos de 1 minuto',
+                    style: TextStyle(fontSize: 11, color: Color(0xFF7A5C50)),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 14,
+              color: Color(0xFF1F1410),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActiveBlockCardHome(AppBlock block) {
+    final now = DateTime.now();
+    final remaining = block.endDate.difference(now);
+    final totalDuration = block.endDate.difference(block.startDate);
+    final elapsed = now.difference(block.startDate);
+    final progress = totalDuration.inSeconds > 0
+        ? (elapsed.inSeconds / totalDuration.inSeconds).clamp(0.0, 1.0)
+        : 0.0;
+
+    const Map<String, List<Color>> brandColors = {
+      'com.instagram.android': [Color(0xFFE1306C), Color(0xFF833AB4)],
+      'com.facebook.katana': [Color(0xFF1877F2), Color(0xFF1877F2)],
+      'com.zhiliaoapp.musically': [Color(0xFF010101), Color(0xFF69C9D0)],
+      'com.twitter.android': [Color(0xFF000000), Color(0xFF000000)],
+      'com.google.android.youtube': [Color(0xFFFF0000), Color(0xFFCC0000)],
+    };
+
+    final colors = brandColors[block.packageName] ??
+        [const Color(0xFF7A5C50), const Color(0xFF7A5C50)];
+    final appOption = _popularBlockApps.firstWhere(
+      (opt) => opt.packageName == block.packageName,
+      orElse: () => const _PopularBlockAppOption(
+        packageName: '',
+        appName: '',
+        icon: Icons.block_rounded,
+      ),
+    );
+
+    String remainingText;
+    if (remaining.inDays >= 1) {
+      remainingText = '${remaining.inDays}d ${remaining.inHours.remainder(24)}h';
+    } else if (remaining.inHours >= 1) {
+      remainingText = '${remaining.inHours}h ${remaining.inMinutes.remainder(60)}m';
+    } else if (remaining.inMinutes > 0) {
+      remainingText = '${remaining.inMinutes}m';
+    } else {
+      remainingText = 'Finalizado';
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: colors,
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(appOption.icon, color: Colors.white, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  block.appName,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                    color: Color(0xFF1F1410),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'faltan $remainingText',
+                  style: const TextStyle(fontSize: 11, color: Color(0xFF7A5C50)),
+                ),
+                const SizedBox(height: 8),
+                // Gradient progress bar
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(99),
+                  child: Container(
+                    height: 5,
+                    color: const Color(0xFFFCE6D3),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: FractionallySizedBox(
+                        widthFactor: progress,
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Color(0xFFFF5B3A), Color(0xFFFFB444)],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAccessibilityWarningCard() {
+    return GestureDetector(
+      onTap: () async => await _accessibilityStatus.openSettings(),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.error,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.white, size: 22),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'El servicio de accesibilidad está desactivado. Tocá aquí para activarlo.',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios, color: Colors.white, size: 14),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── Ancla tab ───────────────────────────────────────────────────────────
+
+  Widget _buildAnclaTab() {
+    return SafeArea(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(22, 18, 22, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'ANCLA',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.5,
+                    color: Color(0xFF7A5C50),
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Solicitudes',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                    color: Color(0xFF1F1410),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (pendingRequests.isEmpty)
+            Expanded(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 110,
+                        height: 110,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF7EE),
+                          border: Border.all(color: const Color(0xFFFF5B3A), width: 2),
+                          borderRadius: BorderRadius.circular(36),
+                        ),
+                        child: const Icon(
+                          Icons.notifications_rounded,
+                          size: 42,
+                          color: Color(0xFFFF5B3A),
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+                      const Text(
+                        'Sin pedidos.\nY eso está bien.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.5,
+                          height: 1.15,
+                          color: Color(0xFF1F1410),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Cuando quieran desbloquear una app bloqueada, el pedido llegará aquí.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF7A5C50),
+                          height: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+          else
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.fromLTRB(18, 0, 18, 80),
+                itemCount: pendingRequests.length,
+                itemBuilder: (ctx, i) {
+                  final req = pendingRequests[i];
+                  final appName = _displayNameForPackage(req.packageName);
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      padding: const EdgeInsets.all(14),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF7EE),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.lock_open_rounded,
+                              color: Color(0xFFFF5B3A),
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  appName,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 14,
+                                    color: Color(0xFF1F1410),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  _pendingRequestedAtText(req),
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFF7A5C50),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Vos tab ─────────────────────────────────────────────────────────────
+
+  Widget _buildVosTab() {
+    final activeCount = activeBlocks.where((b) => b.endDate.isAfter(DateTime.now())).length;
+
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(22, 18, 22, 80),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'VOS',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.5,
+                color: Color(0xFF7A5C50),
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Tu perfil',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+                color: Color(0xFF1F1410),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Stats card
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildStatItem('$activeCount', 'Bloqueos activos'),
+                  Container(width: 1, height: 40, color: const Color(0xFFFCE6D3)),
+                  _buildStatItem('${selectedApps.length}', 'Apps elegidas'),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Ancla (friend) card
+            if (_hasFriendConfigured) ...[
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFFFF5B3A), Color(0xFFFF8C42)],
+                        ),
+                        borderRadius: BorderRadius.all(Radius.circular(14)),
+                      ),
+                      child: Center(
+                        child: Text(
+                          (friendName ?? 'A').isNotEmpty
+                              ? (friendName ?? 'A')[0].toUpperCase()
+                              : 'A',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            friendName ?? '',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                              color: Color(0xFF1F1410),
+                            ),
+                          ),
+                          const Text(
+                            'tu ancla',
+                            style: TextStyle(fontSize: 11, color: Color(0xFF7A5C50)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _openFriendScreen,
+                      child: const Text('Cambiar'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // Actions
+            _buildVosActionCard(
+              Icons.bar_chart_rounded,
+              'Estadísticas e historial',
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const StatsScreen()),
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (kDebugMode) ...[
+              _buildVosActionCard(
+                Icons.bug_report_rounded,
+                'Diagnóstico de sincronización',
+                _openDebugDiagnosticsScreen,
+              ),
+              const SizedBox(height: 8),
+            ],
+            _buildVosActionCard(
+              Icons.restart_alt_rounded,
+              'Reiniciar configuración',
+              () {
+                showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Reiniciar configuración'),
+                    content: const Text(
+                      'Se borrará toda la configuración guardada. ¿Continuás?',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Cancelar'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text(
+                          'Reiniciar',
+                          style: TextStyle(color: AppColors.error),
+                        ),
+                      ),
+                    ],
+                  ),
+                ).then((confirmed) {
+                  if (confirmed == true) _clearAllData();
+                });
+              },
+              isDestructive: true,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatItem(String value, String label) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFFFF5B3A),
+            letterSpacing: -1,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF7A5C50))),
+      ],
+    );
+  }
+
+  Widget _buildVosActionCard(
+    IconData icon,
+    String label,
+    VoidCallback onTap, {
+    bool isDestructive = false,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: isDestructive ? AppColors.error : const Color(0xFF7A5C50),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  color: isDestructive ? AppColors.error : const Color(0xFF1F1410),
+                ),
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 14,
+              color: const Color(0xFF7A5C50).withValues(alpha: 0.5),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── Home bottom nav (dark pill) ─────────────────────────────────────────
+
+  Widget _buildHomeBottomNav(bool isGradientBg) {
+    final tabs = [
+      (Icons.shield_rounded, 'Inicio'),
+      (Icons.notifications_rounded, 'Ancla'),
+      (Icons.person_rounded, 'Vos'),
+    ];
+
+    if (isGradientBg) {
+      // Empty state: semi-transparent dark bar flush to screen bottom
+      return Container(
+        decoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(color: Colors.white.withValues(alpha: 0.15)),
+          ),
+          color: Colors.black.withValues(alpha: 0.18),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Row(
+            children: tabs.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final label = entry.value.$2;
+              final icon = entry.value.$1;
+              final isActive = _homeTabIndex == idx;
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => setState(() => _homeTabIndex = idx),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          icon,
+                          size: 18,
+                          color: Colors.white.withValues(alpha: isActive ? 1.0 : 0.55),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white.withValues(alpha: isActive ? 1.0 : 0.55),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      );
+    }
+
+    // Dashboard / other tabs: dark floating pill
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+        child: Container(
+          height: 60,
+          decoration: BoxDecoration(
+            color: const Color(0xFF1F1410),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          padding: const EdgeInsets.all(6),
+          child: Row(
+            children: tabs.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final label = entry.value.$2;
+              final icon = entry.value.$1;
+              final isActive = _homeTabIndex == idx;
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => setState(() => _homeTabIndex = idx),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    decoration: isActive
+                        ? const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Color(0xFFFF5B3A), Color(0xFFFF8C42)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.all(Radius.circular(14)),
+                          )
+                        : const BoxDecoration(),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          icon,
+                          size: 20,
+                          color: Colors.white.withValues(alpha: isActive ? 1.0 : 0.55),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white.withValues(alpha: isActive ? 1.0 : 0.55),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─── Root build ──────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    return _showingWizard ? _buildWizardScaffold() : _buildHomeScaffold();
   }
 }
 

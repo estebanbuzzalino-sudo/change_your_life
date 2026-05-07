@@ -243,11 +243,25 @@ class _AppsSelectionScreenState extends State<AppsSelectionScreen> {
                         color: Colors.amber.shade100,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 16,
-                          vertical: 10,
+                          vertical: 12,
                         ),
-                        child: const Text(
-                          'Modo fallback activo: mostrando lista compatible.',
-                          textAlign: TextAlign.center,
+                        child: Row(
+                          children: const [
+                            Icon(Icons.info_outline,
+                                size: 20, color: Color(0xFF8B5C00)),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'En este dispositivo no pudimos detectar bien el listado. '
+                                'Es posible que falten algunas apps; si no encontrás la que '
+                                'querés bloquear, contactanos.',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Color(0xFF6B4400),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     Expanded(
@@ -259,7 +273,6 @@ class _AppsSelectionScreenState extends State<AppsSelectionScreen> {
 
                           return CheckboxListTile(
                             title: Text(app.name),
-                            subtitle: Text(app.packageName),
                             value: isSelected,
                             onChanged: (value) {
                               _toggleApp(app, value ?? false);

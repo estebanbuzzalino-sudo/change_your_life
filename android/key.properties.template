@@ -1,0 +1,11 @@
+# Copiá este archivo como "key.properties" (sin .template) y completá los valores.
+# NUNCA commitees key.properties — ya está en .gitignore.
+#
+# Para generar el keystore ejecutá:
+#   keytool -genkey -v -keystore android/keystore/release.keystore \
+#           -alias changeyourlife -keyalg RSA -keysize 2048 -validity 10000
+#
+storeFile=keystore/release.keystore
+storePassword=TU_CONTRASEÑA_AQUI
+keyAlias=changeyourlife
+keyPassword=TU_CONTRASEÑA_AQUI

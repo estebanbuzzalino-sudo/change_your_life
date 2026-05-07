@@ -1,73 +1,136 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#FDEAEA"
-    android:gravity="center"
-    android:orientation="vertical"
-    android:padding="24dp">
+    android:background="#080B14"
+    android:fillViewport="true">
 
-    <TextView
-        android:id="@+id/blockTitle"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="14dp"
-        android:text="App bloqueada"
-        android:textColor="#C62828"
-        android:textSize="28sp"
-        android:textStyle="bold" />
-
-    <TextView
-        android:id="@+id/blockMessage"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="10dp"
-        android:gravity="center"
-        android:text="Recorda por que bloqueaste esta app: este es tu momento para elegir algo que te haga bien."
-        android:textColor="#263238"
-        android:textSize="18sp" />
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:paddingLeft="32dp"
+        android:paddingRight="32dp"
+        android:paddingTop="72dp"
+        android:paddingBottom="48dp">
 
-    <TextView
-        android:id="@+id/blockSubMessage"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="26dp"
-        android:gravity="center"
-        android:text="Proba leer unos minutos, moverte, respirar o avanzar con algo importante."
-        android:textColor="#455A64"
-        android:textSize="15sp" />
+        <!-- Ícono central -->
+        <FrameLayout
+            android:layout_width="88dp"
+            android:layout_height="88dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="28dp"
+            android:background="@drawable/bg_block_icon">
 
-    <Button
-        android:id="@+id/openReplacementsButton"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="8dp"
-        android:text="Ver alternativas ahora"
-        android:textAllCaps="false" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:text="⏸"
+                android:textSize="38sp" />
+        </FrameLayout>
 
-    <TextView
-        android:id="@+id/replacementsHintText"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="18dp"
-        android:gravity="center"
-        android:text="No te olvides: si la bloqueaste, fue por una razon."
-        android:textColor="#546E7A"
-        android:textSize="13sp" />
+        <!-- Título: "{App} está bloqueada" -->
+        <TextView
+            android:id="@+id/blockTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:gravity="center"
+            android:text="App bloqueada"
+            android:textColor="#F1F5F9"
+            android:textSize="26sp"
+            android:textStyle="bold"
+            android:lineSpacingMultiplier="1.2" />
 
-    <Button
-        android:id="@+id/requestUnlockButton"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="10dp"
-        android:text="Solicitar desbloqueo"
-        android:textAllCaps="false" />
+        <!-- Mensaje principal -->
+        <TextView
+            android:id="@+id/blockMessage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp"
+            android:gravity="center"
+            android:text="Recordá por qué la bloqueaste.\nEste es tu momento para elegir algo que te haga bien."
+            android:textColor="#94A3B8"
+            android:textSize="16sp"
+            android:lineSpacingMultiplier="1.45" />
 
-    <Button
-        android:id="@+id/closeButton"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Volver"
-        android:textAllCaps="false" />
+        <!-- Mensaje secundario -->
+        <TextView
+            android:id="@+id/blockSubMessage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="28dp"
+            android:gravity="center"
+            android:text="Probá leer, moverte, respirar\no avanzar con algo importante."
+            android:textColor="#64748B"
+            android:textSize="14sp"
+            android:lineSpacingMultiplier="1.4" />
 
-</LinearLayout>
+        <!-- Badge con tiempo restante -->
+        <TextView
+            android:id="@+id/blockEndDateText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="40dp"
+            android:background="@drawable/bg_timer_badge"
+            android:paddingLeft="18dp"
+            android:paddingRight="18dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:textColor="#22C55E"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <!-- Botón primario: Ver alternativas -->
+        <Button
+            android:id="@+id/openReplacementsButton"
+            android:layout_width="match_parent"
+            android:layout_height="54dp"
+            android:layout_marginBottom="10dp"
+            android:background="@drawable/bg_btn_primary"
+            android:text="Ver alternativas ahora"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <!-- Hint -->
+        <TextView
+            android:id="@+id/replacementsHintText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="20dp"
+            android:gravity="center"
+            android:text="Si la bloqueaste, fue por una razón."
+            android:textColor="#475569"
+            android:textSize="12sp" />
+
+        <!-- Botón secundario: Solicitar desbloqueo -->
+        <Button
+            android:id="@+id/requestUnlockButton"
+            android:layout_width="match_parent"
+            android:layout_height="54dp"
+            android:layout_marginBottom="12dp"
+            android:background="@drawable/bg_btn_secondary"
+            android:text="Solicitar desbloqueo"
+            android:textAllCaps="false"
+            android:textColor="#22C55E"
+            android:textSize="15sp" />
+
+        <!-- Botón ghost: Volver -->
+        <Button
+            android:id="@+id/closeButton"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:background="@android:color/transparent"
+            android:text="Volver al inicio"
+            android:textAllCaps="false"
+            android:textColor="#64748B"
+            android:textSize="14sp" />
+
+    </LinearLayout>
+</ScrollView>

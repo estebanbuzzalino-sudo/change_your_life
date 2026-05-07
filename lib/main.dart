@@ -1,22 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/home_screen.dart';
+import 'screens/onboarding_screen.dart';
+import 'theme/app_theme.dart';
 
-void main() {
-  runApp(const ChangeYourLifeApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final prefs = await SharedPreferences.getInstance();
+  final onboardingCompleted = prefs.getBool('onboarding_completed') ?? false;
+  runApp(ChangeYourLifeApp(showOnboarding: !onboardingCompleted));
 }
 
 class ChangeYourLifeApp extends StatelessWidget {
-  const ChangeYourLifeApp({super.key});
+  final bool showOnboarding;
+
+  const ChangeYourLifeApp({super.key, required this.showOnboarding});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Change Your Life in Community',
-      theme: ThemeData(
-        primarySwatch: Colors.green,
-      ),
-      home: HomeScreen(),
+      title: 'Unscroll',
+      theme: SRTheme.light,
+      darkTheme: SRTheme.light,
+      themeMode: ThemeMode.light,
+      home: showOnboarding ? const OnboardingScreen() : const HomeScreen(),
     );
   }
 }

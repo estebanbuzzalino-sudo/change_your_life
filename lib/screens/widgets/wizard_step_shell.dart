@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
 
 class WizardStepShell extends StatelessWidget {
   final String? stepLabel;
@@ -25,19 +26,23 @@ class WizardStepShell extends StatelessWidget {
             style: const TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w700,
-              color: Colors.black54,
+              color: AppColors.primary,
             ),
           ),
           const SizedBox(height: 6),
         ],
         Text(
           title,
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+          style: const TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+          ),
         ),
         const SizedBox(height: 6),
         Text(
           subtitle,
-          style: const TextStyle(fontSize: 15, color: Colors.black87),
+          style: const TextStyle(fontSize: 15, color: AppColors.textSecondary),
         ),
         const SizedBox(height: 18),
         child,

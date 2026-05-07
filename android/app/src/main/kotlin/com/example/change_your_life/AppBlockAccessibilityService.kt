@@ -26,6 +26,7 @@ class AppBlockAccessibilityService : AccessibilityService() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val prefsFileName = "FlutterSharedPreferences"
     private val blockedPackagesKey = "flutter.blocked_packages_csv"
+    private val blockedEndDatesKey = "flutter.blocked_end_dates_csv"
     private val temporaryUnlockedPackagesKey = "flutter.temporary_unlocked_packages_csv"
     private lateinit var prefs: SharedPreferences
     private var blockedPackagesCache: Set<String> = emptySet()
@@ -214,6 +215,7 @@ class AppBlockAccessibilityService : AccessibilityService() {
                 )
                 intent.putExtra("appName", getAppLabel(openedPackage))
                 intent.putExtra("packageName", openedPackage)
+                intent.putExtra("endDateMillis", getEndDateMillisFor(openedPackage))
                 startActivity(intent)
             }, launchAfterHomeDelayMillis)
         }
@@ -322,5 +324,22 @@ class AppBlockAccessibilityService : AccessibilityService() {
         } catch (e: Exception) {
             packageName
         }
+    }
+
+    private fun getEndDateMillisFor(packageName: String): Long {
+        if (!this::prefs.isInitialized) return 0L
+        val csv = prefs.getString(blockedEndDatesKey, "") ?: ""
+        if (csv.isBlank()) return 0L
+
+        csv.split(",").forEach { raw ->
+            val entry = raw.trim()
+            if (entry.isEmpty() || !entry.contains("|")) return@forEach
+            val pkg = entry.substringBefore("|").trim()
+            val millis = entry.substringAfter("|", "").trim().toLongOrNull()
+            if (pkg == packageName && millis != null) {
+                return millis
+            }
+        }
+        return 0L
     }
 }

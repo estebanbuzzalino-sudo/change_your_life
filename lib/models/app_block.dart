@@ -33,6 +33,7 @@ class AppBlock {
   }
 
   factory AppBlock.fromMap(Map<String, dynamic> map) {
+    final now = DateTime.now();
     return AppBlock(
       appName: map['appName'] ?? '',
       packageName: map['packageName'] ?? '',
@@ -40,8 +41,13 @@ class AppBlock {
       durationValue: map['durationValue'] ?? 1,
       friendName: map['friendName'] ?? '',
       friendEmail: map['friendEmail'] ?? '',
-      startDate: DateTime.parse(map['startDate']),
-      endDate: DateTime.parse(map['endDate']),
+      startDate: _parseDateOr(map['startDate'], now),
+      endDate: _parseDateOr(map['endDate'], now),
     );
+  }
+
+  static DateTime _parseDateOr(dynamic value, DateTime fallback) {
+    if (value is! String || value.isEmpty) return fallback;
+    return DateTime.tryParse(value) ?? fallback;
   }
 }
