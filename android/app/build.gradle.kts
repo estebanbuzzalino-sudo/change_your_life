@@ -1,8 +1,16 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+val keyProperties = Properties()
+val keyPropertiesFile = rootProject.file("key.properties")
+if (keyPropertiesFile.exists()) {
+    keyPropertiesFile.inputStream().use { keyProperties.load(it) }
 }
 
 android {
@@ -19,45 +27,38 @@ android {
         jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
-    // Signing config — coloca tu keystore en android/keystore/release.keystore
-    // y creá android/key.properties con:
-    //   storeFile=keystore/release.keystore
-    //   storePassword=TU_CONTRASEÑA
-    //   keyAlias=TU_ALIAS
-    //   keyPassword=TU_CONTRASEÑA
-    val keyPropertiesFile = rootProject.file("key.properties")
-    val keyProperties = java.util.Properties()
-    if (keyPropertiesFile.exists()) {
-        keyProperties.load(keyPropertiesFile.inputStream())
-    }
-
-    signingConfigs {
-        if (keyPropertiesFile.exists()) {
-            create("release") {
-                keyAlias = keyProperties["keyAlias"] as String
-                keyPassword = keyProperties["keyPassword"] as String
-                storeFile = file(keyProperties["storeFile"] as String)
-                storePassword = keyProperties["storePassword"] as String
-            }
-        }
-    }
-
     defaultConfig {
-        applicationId = "com.changeyourlife.app"
+        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
+        applicationId = "com.example.change_your_life"
+        // You can update the following values to match your application needs.
+        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            if (keyPropertiesFile.exists()) {
+                val storeFilePath = keyProperties["storeFile"] as String
+                storeFile = file(storeFilePath)
+                storePassword = keyProperties["storePassword"] as String
+                keyAlias = keyProperties["keyAlias"] as String
+                keyPassword = keyProperties["keyPassword"] as String
+            }
+        }
+    }
+
     buildTypes {
         release {
-            signingConfig = if (keyPropertiesFile.exists())
+            // Uses upload/release key if android/key.properties exists.
+            // Temporary fallback to debug avoids blocking local builds.
+            signingConfig = if (keyPropertiesFile.exists()) {
                 signingConfigs.getByName("release")
-            else
+            } else {
                 signingConfigs.getByName("debug")
-            isMinifyEnabled = false
-            isShrinkResources = false
+            }
         }
     }
 }
