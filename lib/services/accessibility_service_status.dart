@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class AccessibilityServiceStatus {
-  static const _channel = MethodChannel('com.example.change_your_life/accessibility');
+  static const _channel = MethodChannel('com.dedono.app/accessibility');
 
   Future<bool> isEnabled() async {
     if (!Platform.isAndroid) return true;

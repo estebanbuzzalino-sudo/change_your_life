@@ -1,4 +1,4 @@
-package com.example.change_your_life
+package com.dedono.app
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
@@ -225,7 +225,7 @@ class AppBlockAccessibilityService : AccessibilityService() {
     }
 
     private fun isCriticalPackage(openedPackage: String): Boolean {
-        if (openedPackage == packageName || openedPackage == "com.example.change_your_life") {
+        if (openedPackage == packageName || openedPackage == "com.dedono.app") {
             return true
         }
 

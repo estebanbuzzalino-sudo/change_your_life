@@ -19,7 +19,7 @@ class _AppsSelectionScreenState extends State<AppsSelectionScreen> {
   List<AppInfo> installedApps = [];
   bool isLoading = true;
   bool isUsingFallbackMode = false;
-  static const String _ownPackage = 'com.example.change_your_life';
+  static const String _ownPackage = 'com.dedono.app';
   static const Set<String> _blockedExactPackages = {
     'android',
     'com.android.settings',

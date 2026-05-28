@@ -1,4 +1,4 @@
-package com.example.change_your_life
+package com.dedono.app
 
 import android.content.Context
 import android.content.SharedPreferences

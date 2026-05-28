@@ -49,7 +49,7 @@ class UsageAccessService {
       });
 
       const ignoredPackages = {
-        'com.example.change_your_life',
+        'com.dedono.app',
         'com.google.android.gms',
         'com.android.systemui',
         'com.google.android.permissioncontroller',
