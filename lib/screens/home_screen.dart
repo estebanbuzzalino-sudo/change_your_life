@@ -437,9 +437,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       friendEmail = prefs.getString('friendEmail');
       friendWhatsappE164 = prefs.getString(_friendWhatsappE164Key);
       final savedNotificationMode = prefs.getString(_notificationModeKey);
-      _notificationMode = savedNotificationMode == _notificationWhatsappOnly
-          ? _notificationWhatsappOnly
-          : _notificationEmailOnly;
+      // WhatsApp deshabilitado por ahora — forzar email_only siempre.
+      _notificationMode = _notificationEmailOnly;
+      if (savedNotificationMode == _notificationWhatsappOnly) {
+        await prefs.setString(_notificationModeKey, _notificationEmailOnly);
+      }
       _selectedReplacementIds
         ..clear()
         ..addAll(savedReplacementIds);
@@ -2156,8 +2158,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         ),
                         ButtonSegment<String>(
                           value: _notificationWhatsappOnly,
-                          label: Text('Solo WhatsApp'),
+                          label: Text('WhatsApp'),
                           icon: Icon(Icons.chat_outlined),
+                          enabled: false,
                         ),
                       ],
                       selected: {_notificationMode},
@@ -2168,12 +2171,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         await _saveData();
                       },
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _requiresWhatsappChannel
-                          ? 'Se envia por WhatsApp automaticamente.'
-                          : 'Se envia por email automaticamente.',
-                      style: const TextStyle(color: Colors.black54),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'WhatsApp próximamente',
+                      style: TextStyle(fontSize: 11, color: Colors.black38),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Se envia por email automaticamente.',
+                      style: TextStyle(color: Colors.black54),
                     ),
                     if (_requiresWhatsappChannel) ...[
                       const SizedBox(height: 8),
