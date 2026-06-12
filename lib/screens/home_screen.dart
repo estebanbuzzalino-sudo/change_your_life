@@ -13,6 +13,7 @@ import '../services/unlock_grants_sync_service.dart';
 import 'friend_screen.dart';
 import 'block_screen.dart';
 import 'debug_sync_diagnostics_screen.dart';
+import 'anchor_inbox_screen.dart';
 import 'pending_requests_screen.dart';
 import 'widgets/selectable_option_card.dart';
 import 'widgets/wizard_bottom_nav.dart';
@@ -1272,14 +1273,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _saveBlockedPackagesForAndroid() async {
     final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now();
 
-    final packages = activeBlocks
-        .map((block) => block.packageName)
+    // Only write non-expired blocks so the accessibility service stops blocking when time is up.
+    final activeNonExpired = activeBlocks
+        .where((b) => b.endDate.isAfter(now))
+        .toList();
+
+    final packages = activeNonExpired
+        .map((b) => b.packageName)
         .where((pkg) => pkg.isNotEmpty)
         .toSet()
         .toList();
 
     await prefs.setString('blocked_packages_csv', packages.join(','));
+
+    final endDates = activeNonExpired
+        .where((b) => b.packageName.isNotEmpty)
+        .map((b) => '${b.packageName}|${b.endDate.millisecondsSinceEpoch}')
+        .join(',');
+    await prefs.setString('blocked_end_dates_csv', endDates);
   }
 
   Future<void> _openFriendScreen() async {
@@ -1315,6 +1328,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
     await _loadTemporaryUnlockedApps();
     await _loadPendingRequests();
+  }
+
+  Future<void> _openAnchorInboxScreen() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const AnchorInboxScreen(),
+      ),
+    );
   }
 
   List<UnlockGrantActiveGrant> _fallbackActiveGrantsFromLocalState() {
@@ -1377,12 +1399,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _temporaryUnlockTimer?.cancel();
     _temporaryUnlockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
-      final now = DateTime.now().millisecondsSinceEpoch;
+      final now = DateTime.now();
+      final nowMillis = now.millisecondsSinceEpoch;
+
+      final updatedUnlocks = temporaryUnlockedApps
+          .where((item) => item.unlockedUntilMillis > nowMillis)
+          .toList();
+
+      final expiredBlocks = activeBlocks.where((b) => !b.endDate.isAfter(now)).toList();
+
       setState(() {
-        temporaryUnlockedApps = temporaryUnlockedApps
-            .where((item) => item.unlockedUntilMillis > now)
-            .toList();
+        temporaryUnlockedApps = updatedUnlocks;
+        if (expiredBlocks.isNotEmpty) {
+          activeBlocks = activeBlocks.where((b) => b.endDate.isAfter(now)).toList();
+        }
       });
+
+      if (expiredBlocks.isNotEmpty) {
+        _saveBlocks();
+        _saveBlockedPackagesForAndroid();
+      }
     });
   }
 
@@ -2494,6 +2530,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       label: Text(
                         'Solicitudes pendientes (${pendingRequests.length})',
                       ),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: _openAnchorInboxScreen,
+                      icon: const Icon(Icons.shield_outlined),
+                      label: const Text('Soy ancla — ver solicitudes para aprobar'),
                     ),
                     const SizedBox(height: 8),
                     if (pendingRequests.isEmpty)

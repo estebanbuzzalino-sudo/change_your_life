@@ -494,6 +494,11 @@ serve(async (req) => {
       });
 
       if (!resendResponse.ok) {
+        // Log the failure but don't abort the request — the record is already created in DB.
+        // The anchor can be notified later via the in-app anchor inbox or by resending.
+        console.warn(
+          `[unlock-requests] emailFailed requestId=${requestId} status=${resendResponse.status} error=${resendResponse.text}`,
+        );
         await createNotificationRecord(supabase, {
           requestId,
           channel: "email",
@@ -506,28 +511,20 @@ serve(async (req) => {
           errorMessage: resendResponse.text,
           payload: emailPayload,
         });
-        return jsonResponse(503, {
-          ok: false,
-          error: {
-            code: "EMAIL_DELIVERY_FAILED",
-            message: resendResponse.text,
-            details: {},
-          },
-          meta: { requestId: requestIdMeta, serverTime },
+        // emailSent stays false — caller can surface this to the user.
+      } else {
+        await createNotificationRecord(supabase, {
+          requestId,
+          channel: "email",
+          provider: "resend",
+          target: friendEmail,
+          status: "sent",
+          providerMessageId: resendResponse.providerMessageId,
+          providerStatus: resendResponse.providerStatus,
+          payload: emailPayload,
         });
+        emailSent = true;
       }
-
-      await createNotificationRecord(supabase, {
-        requestId,
-        channel: "email",
-        provider: "resend",
-        target: friendEmail,
-        status: "sent",
-        providerMessageId: resendResponse.providerMessageId,
-        providerStatus: resendResponse.providerStatus,
-        payload: emailPayload,
-      });
-      emailSent = true;
     } else {
       await createNotificationRecord(supabase, {
         requestId,
