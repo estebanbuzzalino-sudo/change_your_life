@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { SmtpClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import nodemailer from "npm:nodemailer@6";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -134,24 +134,14 @@ async function sendEmailViaSmtp(params: {
   subject: string;
   html: string;
 }) {
-  const client = new SmtpClient();
   try {
-    if (params.smtpPort === 465) {
-      await client.connectTLS({
-        hostname: params.smtpHost,
-        port: params.smtpPort,
-        username: params.smtpUser,
-        password: params.smtpPassword,
-      });
-    } else {
-      await client.connect({
-        hostname: params.smtpHost,
-        port: params.smtpPort,
-        username: params.smtpUser,
-        password: params.smtpPassword,
-      });
-    }
-    await client.send({
+    const transporter = nodemailer.createTransport({
+      host: params.smtpHost,
+      port: params.smtpPort,
+      secure: params.smtpPort === 465,
+      auth: { user: params.smtpUser, pass: params.smtpPassword },
+    });
+    await transporter.sendMail({
       from: params.fromEmail,
       to: params.friendEmail,
       subject: params.subject,
@@ -161,8 +151,6 @@ async function sendEmailViaSmtp(params: {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { ok: false, providerMessageId: null, providerStatus: null, text: message, status: 500 };
-  } finally {
-    await client.close().catch(() => {});
   }
 }
 
