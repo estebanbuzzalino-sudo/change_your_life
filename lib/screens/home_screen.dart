@@ -445,6 +445,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         : savedDurationValue.clamp(1, 12).toDouble();
     final savedReplacementIds = prefs.getStringList(_replacementChoicesKey) ?? [];
 
+    final savedNotificationMode = prefs.getString(_notificationModeKey);
     setState(() {
       selectedDurationType = normalizedDurationType;
       selectedValue = normalizedDurationValue;
@@ -457,12 +458,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       friendName = prefs.getString('friendName');
       friendEmail = prefs.getString('friendEmail');
       friendWhatsappE164 = prefs.getString(_friendWhatsappE164Key);
-      final savedNotificationMode = prefs.getString(_notificationModeKey);
       // WhatsApp deshabilitado por ahora — forzar email_only siempre.
       _notificationMode = _notificationEmailOnly;
-      if (savedNotificationMode == _notificationWhatsappOnly) {
-        await prefs.setString(_notificationModeKey, _notificationEmailOnly);
-      }
       _selectedReplacementIds
         ..clear()
         ..addAll(savedReplacementIds);
@@ -471,6 +468,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       isLoading = false;
     });
 
+    if (savedNotificationMode == _notificationWhatsappOnly) {
+      await prefs.setString(_notificationModeKey, _notificationEmailOnly);
+    }
     _seedAppNameCacheFromKnownData();
     await _saveBlockedPackagesForAndroid();
     await _loadTemporaryUnlockedApps();
