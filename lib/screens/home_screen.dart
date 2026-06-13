@@ -16,6 +16,7 @@ import 'friend_screen.dart';
 import 'stats_screen.dart';
 import 'block_screen.dart';
 import 'debug_sync_diagnostics_screen.dart';
+import 'anchor_inbox_screen.dart';
 import 'pending_requests_screen.dart';
 import 'widgets/selectable_option_card.dart';
 import 'widgets/wizard_bottom_nav.dart';
@@ -457,9 +458,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       friendEmail = prefs.getString('friendEmail');
       friendWhatsappE164 = prefs.getString(_friendWhatsappE164Key);
       final savedNotificationMode = prefs.getString(_notificationModeKey);
-      _notificationMode = savedNotificationMode == _notificationWhatsappOnly
-          ? _notificationWhatsappOnly
-          : _notificationEmailOnly;
+      // WhatsApp deshabilitado por ahora — forzar email_only siempre.
+      _notificationMode = _notificationEmailOnly;
+      if (savedNotificationMode == _notificationWhatsappOnly) {
+        await prefs.setString(_notificationModeKey, _notificationEmailOnly);
+      }
       _selectedReplacementIds
         ..clear()
         ..addAll(savedReplacementIds);
@@ -1298,19 +1301,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _saveBlockedPackagesForAndroid() async {
     final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now();
 
-    final packages = activeBlocks
-        .map((block) => block.packageName)
+    // Only write non-expired blocks so the accessibility service stops blocking when time is up.
+    final activeNonExpired = activeBlocks
+        .where((b) => b.endDate.isAfter(now))
+        .toList();
+
+    final packages = activeNonExpired
+        .map((b) => b.packageName)
         .where((pkg) => pkg.isNotEmpty)
         .toSet()
         .toList();
 
     await prefs.setString('blocked_packages_csv', packages.join(','));
 
-    final endDates = activeBlocks
-        .where((block) => block.packageName.isNotEmpty)
-        .map((block) =>
-            '${block.packageName}|${block.endDate.millisecondsSinceEpoch}')
+    final endDates = activeNonExpired
+        .where((b) => b.packageName.isNotEmpty)
+        .map((b) => '${b.packageName}|${b.endDate.millisecondsSinceEpoch}')
         .join(',');
     await prefs.setString('blocked_end_dates_csv', endDates);
   }
@@ -1348,6 +1356,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
     await _loadTemporaryUnlockedApps();
     await _loadPendingRequests();
+  }
+
+  Future<void> _openAnchorInboxScreen() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const AnchorInboxScreen(),
+      ),
+    );
   }
 
   List<UnlockGrantActiveGrant> _fallbackActiveGrantsFromLocalState() {
@@ -1410,12 +1427,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _temporaryUnlockTimer?.cancel();
     _temporaryUnlockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
-      final now = DateTime.now().millisecondsSinceEpoch;
+      final now = DateTime.now();
+      final nowMillis = now.millisecondsSinceEpoch;
+
+      final updatedUnlocks = temporaryUnlockedApps
+          .where((item) => item.unlockedUntilMillis > nowMillis)
+          .toList();
+
+      final expiredBlocks = activeBlocks.where((b) => !b.endDate.isAfter(now)).toList();
+
       setState(() {
-        temporaryUnlockedApps = temporaryUnlockedApps
-            .where((item) => item.unlockedUntilMillis > now)
-            .toList();
+        temporaryUnlockedApps = updatedUnlocks;
+        if (expiredBlocks.isNotEmpty) {
+          activeBlocks = activeBlocks.where((b) => b.endDate.isAfter(now)).toList();
+        }
       });
+
+      if (expiredBlocks.isNotEmpty) {
+        _saveBlocks();
+        _saveBlockedPackagesForAndroid();
+      }
     });
   }
 
@@ -2165,8 +2196,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         ),
                         ButtonSegment<String>(
                           value: _notificationWhatsappOnly,
-                          label: Text('Solo WhatsApp'),
+                          label: Text('WhatsApp'),
                           icon: Icon(Icons.chat_outlined),
+                          enabled: false,
                         ),
                       ],
                       selected: {_notificationMode},
@@ -2177,12 +2209,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         await _saveData();
                       },
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _requiresWhatsappChannel
-                          ? 'Se envia por WhatsApp automaticamente.'
-                          : 'Se envia por email automaticamente.',
-                      style: const TextStyle(color: AppColors.textSecondary),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'WhatsApp próximamente',
+                      style: TextStyle(fontSize: 11, color: Colors.black38),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Se envia por email automaticamente.',
+                      style: TextStyle(color: Colors.black54),
                     ),
                     if (_requiresWhatsappChannel) ...[
                       const SizedBox(height: 8),
@@ -2511,6 +2546,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       label: Text(
                         'Solicitudes pendientes (${pendingRequests.length})',
                       ),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: _openAnchorInboxScreen,
+                      icon: const Icon(Icons.shield_outlined),
+                      label: const Text('Soy ancla — ver solicitudes para aprobar'),
                     ),
                     const SizedBox(height: 8),
                     if (pendingRequests.isEmpty)

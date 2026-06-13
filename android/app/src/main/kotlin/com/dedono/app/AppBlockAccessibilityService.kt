@@ -309,11 +309,32 @@ class AppBlockAccessibilityService : AccessibilityService() {
 
     private fun getBlockedPackages(): Set<String> {
         val csv = prefs.getString(blockedPackagesKey, "") ?: ""
+        val endDates = getBlockedEndDatesMap()
+        val now = System.currentTimeMillis()
 
         return csv.split(",")
             .map { it.trim() }
             .filter { it.isNotEmpty() }
+            .filter { pkg ->
+                // No end date stored → blocked indefinitely; end date in future → still active.
+                val endMillis = endDates[pkg] ?: return@filter true
+                endMillis > now
+            }
             .toSet()
+    }
+
+    private fun getBlockedEndDatesMap(): Map<String, Long> {
+        val csv = prefs.getString(blockedEndDatesKey, "") ?: ""
+        if (csv.isBlank()) return emptyMap()
+        val result = mutableMapOf<String, Long>()
+        csv.split(",").forEach { raw ->
+            val entry = raw.trim()
+            if (entry.isEmpty() || !entry.contains("|")) return@forEach
+            val pkg = entry.substringBefore("|").trim()
+            val millis = entry.substringAfter("|", "").trim().toLongOrNull() ?: return@forEach
+            result[pkg] = millis
+        }
+        return result
     }
 
     private fun getAppLabel(packageName: String): String {

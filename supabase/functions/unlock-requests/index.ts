@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import nodemailer from "npm:nodemailer@6";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -123,47 +124,34 @@ async function createNotificationRecord(
   }
 }
 
-async function sendEmailViaResend(params: {
-  resendApiKey: string;
+async function sendEmailViaSmtp(params: {
+  smtpHost: string;
+  smtpPort: number;
+  smtpUser: string;
+  smtpPassword: string;
   fromEmail: string;
   friendEmail: string;
   subject: string;
   html: string;
 }) {
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${params.resendApiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
+  try {
+    const transporter = nodemailer.createTransport({
+      host: params.smtpHost,
+      port: params.smtpPort,
+      secure: params.smtpPort === 465,
+      auth: { user: params.smtpUser, pass: params.smtpPassword },
+    });
+    await transporter.sendMail({
       from: params.fromEmail,
-      to: [params.friendEmail],
+      to: params.friendEmail,
       subject: params.subject,
       html: params.html,
-    }),
-  });
-
-  const text = await response.text();
-  let providerMessageId: string | null = null;
-  let providerStatus: string | null = null;
-  if (text.length > 0) {
-    try {
-      const parsed = JSON.parse(text) as Record<string, unknown>;
-      providerMessageId = asTrimmedString(parsed.id);
-      providerStatus = asTrimmedString(parsed.status);
-    } catch {
-      // Ignore parse errors; keep raw text for diagnostics.
-    }
+    });
+    return { ok: true, providerMessageId: null, providerStatus: "sent", text: "", status: 200 };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, providerMessageId: null, providerStatus: null, text: message, status: 500 };
   }
-
-  return {
-    ok: response.ok,
-    status: response.status,
-    text,
-    providerMessageId: providerMessageId || null,
-    providerStatus: providerStatus || null,
-  };
 }
 
 async function sendWhatsappViaTwilio(params: {
@@ -366,17 +354,16 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const resendApiKey = Deno.env.get("RESEND_API_KEY")!;
-    const fromEmail = Deno.env.get("FROM_EMAIL")!;
+    const smtpHost = Deno.env.get("SMTP_HOST") ?? "smtp.gmail.com";
+    const smtpPort = parseInt(Deno.env.get("SMTP_PORT") ?? "465", 10);
+    const smtpUser = Deno.env.get("SMTP_USER") ?? "";
+    const smtpPassword = Deno.env.get("SMTP_PASSWORD") ?? "";
+    const fromEmail = Deno.env.get("FROM_EMAIL") ?? smtpUser;
     const approvalBaseUrl =
       Deno.env.get("APPROVAL_BASE_URL") ?? "https://oggqvcjtvfgyagaisvmj.functions.supabase.co/approvals";
     const approvalApiBaseUrl =
       Deno.env.get("APPROVAL_API_BASE_URL") ?? "https://oggqvcjtvfgyagaisvmj.functions.supabase.co";
     const approvalWebBaseUrl = Deno.env.get("APPROVAL_WEB_BASE_URL") ?? "";
-    const twilioAccountSid = Deno.env.get("TWILIO_ACCOUNT_SID") ?? "";
-    const twilioAuthToken = Deno.env.get("TWILIO_AUTH_TOKEN") ?? "";
-    const twilioWhatsappFrom = Deno.env.get("TWILIO_WHATSAPP_FROM") ?? "";
-    const whatsappEnabled = (Deno.env.get("WHATSAPP_ENABLED") ?? "true").trim().toLowerCase() !== "false";
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
@@ -476,63 +463,71 @@ serve(async (req) => {
         requestedAt: requestedAt.toISOString(),
         notificationMode,
       };
-      await createNotificationRecord(supabase, {
-        requestId,
-        channel: "email",
-        provider: "resend",
-        target: friendEmail,
-        status: "queued",
-        payload: emailPayload,
-      });
 
-      const resendResponse = await sendEmailViaResend({
-        resendApiKey,
-        fromEmail,
-        friendEmail,
-        subject: emailSubject,
-        html: emailHtml,
-      });
-
-      if (!resendResponse.ok) {
+      if (!smtpUser || !smtpPassword) {
+        console.warn(`[unlock-requests] smtpNotConfigured requestId=${requestId} — SMTP_USER or SMTP_PASSWORD missing`);
         await createNotificationRecord(supabase, {
           requestId,
           channel: "email",
-          provider: "resend",
+          provider: "smtp",
           target: friendEmail,
           status: "failed",
-          providerMessageId: resendResponse.providerMessageId,
-          providerStatus: resendResponse.providerStatus,
-          errorCode: `http_${resendResponse.status}`,
-          errorMessage: resendResponse.text,
+          errorCode: "SMTP_NOT_CONFIGURED",
+          errorMessage: "SMTP_USER and SMTP_PASSWORD are required",
           payload: emailPayload,
         });
-        return jsonResponse(503, {
-          ok: false,
-          error: {
-            code: "EMAIL_DELIVERY_FAILED",
-            message: resendResponse.text,
-            details: {},
-          },
-          meta: { requestId: requestIdMeta, serverTime },
+      } else {
+        await createNotificationRecord(supabase, {
+          requestId,
+          channel: "email",
+          provider: "smtp",
+          target: friendEmail,
+          status: "queued",
+          payload: emailPayload,
         });
-      }
 
-      await createNotificationRecord(supabase, {
-        requestId,
-        channel: "email",
-        provider: "resend",
-        target: friendEmail,
-        status: "sent",
-        providerMessageId: resendResponse.providerMessageId,
-        providerStatus: resendResponse.providerStatus,
-        payload: emailPayload,
-      });
-      emailSent = true;
+        const smtpResponse = await sendEmailViaSmtp({
+          smtpHost,
+          smtpPort,
+          smtpUser,
+          smtpPassword,
+          fromEmail,
+          friendEmail,
+          subject: emailSubject,
+          html: emailHtml,
+        });
+
+        if (!smtpResponse.ok) {
+          console.warn(
+            `[unlock-requests] emailFailed requestId=${requestId} error=${smtpResponse.text}`,
+          );
+          await createNotificationRecord(supabase, {
+            requestId,
+            channel: "email",
+            provider: "smtp",
+            target: friendEmail,
+            status: "failed",
+            errorCode: `smtp_${smtpResponse.status}`,
+            errorMessage: smtpResponse.text,
+            payload: emailPayload,
+          });
+        } else {
+          await createNotificationRecord(supabase, {
+            requestId,
+            channel: "email",
+            provider: "smtp",
+            target: friendEmail,
+            status: "sent",
+            payload: emailPayload,
+          });
+          emailSent = true;
+        }
+      }
     } else {
       await createNotificationRecord(supabase, {
         requestId,
         channel: "email",
-        provider: "resend",
+        provider: "smtp",
         target: friendEmail || "not_configured",
         status: "skipped",
         errorCode: "CHANNEL_DISABLED",
