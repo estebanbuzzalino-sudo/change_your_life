@@ -9,7 +9,7 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private val channelName = "com.dedono.app/accessibility"
-    private val serviceId = "com.changeyourlife.app/com.dedono.app.AppBlockAccessibilityService"
+    private val serviceId = "com.dedono.app/com.dedono.app.AppBlockAccessibilityService"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

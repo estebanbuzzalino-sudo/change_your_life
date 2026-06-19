@@ -333,6 +333,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // Home screen navigation
   bool _showingWizard = false;
   int _homeTabIndex = 0; // 0 = Inicio, 1 = Ancla, 2 = Vos
+  int _maxReachedWizardIndex = 0;
 
   @override
   void initState() {
@@ -561,9 +562,145 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _openReplacementsFromDeepLink() async {
-    await _jumpToWizardStep(2);
     if (!mounted) return;
-    _showMessage('Te llevamos a alternativas utiles para este momento.');
+    _showReplacementsModal();
+  }
+
+  void _showReplacementsModal() {
+    final categories = _selectedReplacementIds.isNotEmpty
+        ? _selectedReplacementIds.toList()
+        : _replacementOptions.map((o) => o.id).toList();
+
+    final suggestions = <_ReplacementSuggestion>[];
+    for (final cat in categories) {
+      final items = _replacementSuggestionsByOptionId[cat] ?? [];
+      final featured = items.where((s) => s.featured).take(1);
+      final rest = items.where((s) => !s.featured).take(1);
+      suggestions.addAll([...featured, ...rest]);
+    }
+    final displaySuggestions = suggestions.isEmpty
+        ? (_replacementSuggestionsByOptionId.values.expand((l) => l.where((s) => s.featured)).take(4).toList())
+        : suggestions;
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(sheetContext).size.height * 0.85,
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(18, 8, 18, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Este es tu momento',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Elegí algo que te haga bien en lugar de scrollear.',
+                    style: TextStyle(color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 16),
+                  ...displaySuggestions.map(
+                    (idea) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: () {
+                            Navigator.pop(sheetContext);
+                            _openReplacementInStore(idea);
+                          },
+                          child: Ink(
+                            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: AppColors.borderStrong),
+                              color: AppColors.card,
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: 42,
+                                  height: 42,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Icon(idea.icon, color: AppColors.primary),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              idea.title,
+                                              style: const TextStyle(fontWeight: FontWeight.w700),
+                                            ),
+                                          ),
+                                          if (idea.featured)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 8,
+                                                vertical: 3,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFE7F2E8),
+                                                borderRadius: BorderRadius.circular(999),
+                                              ),
+                                              child: const Text(
+                                                'Recomendada',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: AppColors.primary,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        idea.action,
+                                        style: const TextStyle(color: AppColors.textSecondary),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      const Text(
+                                        'Abrir en Play Store',
+                                        style: TextStyle(
+                                          color: AppColors.primary,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _applyDeepLinkApproval(Uri uri) async {
@@ -1003,7 +1140,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _showStepRequirementMessage(_currentWizardIndex);
       return;
     }
-    await _goToWizardStep(_currentWizardIndex + 1);
+    final nextIndex = _currentWizardIndex + 1;
+    if (nextIndex > _maxReachedWizardIndex) {
+      setState(() => _maxReachedWizardIndex = nextIndex);
+    }
+    await _goToWizardStep(nextIndex);
   }
 
   Future<void> _confirmAndActivateFromStep2() async {
@@ -1025,6 +1166,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       await _activateBlock(showSuccessMessage: false);
       if (!mounted) return;
+      if (2 > _maxReachedWizardIndex) {
+        setState(() => _maxReachedWizardIndex = 2);
+      }
       await _goToWizardStep(2);
       if (!mounted) return;
       _showMessage('Bloqueo activo. Ahora elegi alternativas positivas.');
@@ -2824,6 +2968,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     setState(() {
       _showingWizard = true;
       _currentWizardIndex = 0;
+      _maxReachedWizardIndex = 0;
+      selectedApps.clear();
     });
     if (_wizardPageController.hasClients) {
       _wizardPageController.jumpToPage(0);
@@ -2899,6 +3045,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             WizardBottomNav(
               items: navItems,
               currentIndex: _currentWizardIndex,
+              maxReachableIndex: _maxReachedWizardIndex,
               onTap: _goToWizardStep,
             ),
           ],
@@ -2970,7 +3117,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         ),
                       ),
                       const Text(
-                        'Unscroll',
+                        'Dedono',
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w800,

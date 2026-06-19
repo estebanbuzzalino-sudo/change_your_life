@@ -14,12 +14,14 @@ class WizardNavItem {
 class WizardBottomNav extends StatelessWidget {
   final List<WizardNavItem> items;
   final int currentIndex;
+  final int maxReachableIndex;
   final ValueChanged<int>? onTap;
 
   const WizardBottomNav({
     super.key,
     required this.items,
     required this.currentIndex,
+    this.maxReachableIndex = 999,
     this.onTap,
   });
 
@@ -38,10 +40,13 @@ class WizardBottomNav extends StatelessWidget {
           final item = items[index];
           final isActive = index == currentIndex;
           final isCompleted = index < currentIndex;
+          final isReachable = index <= maxReachableIndex;
 
           final color = isActive
               ? AppColors.primary
-              : (isCompleted ? AppColors.primaryMuted : AppColors.textMuted);
+              : (isCompleted
+                  ? AppColors.primaryMuted
+                  : (isReachable ? AppColors.textMuted : AppColors.border));
           final background = isActive
               ? AppColors.primary.withValues(alpha: 0.12)
               : (isCompleted
@@ -51,36 +56,39 @@ class WizardBottomNav extends StatelessWidget {
           return Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 2),
-              child: Material(
-                color: background,
-                borderRadius: BorderRadius.circular(12),
-                child: InkWell(
+              child: Opacity(
+                opacity: isReachable ? 1.0 : 0.4,
+                child: Material(
+                  color: background,
                   borderRadius: BorderRadius.circular(12),
-                  onTap: onTap == null ? null : () => onTap!(index),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 8,
-                      horizontal: 4,
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(item.icon, size: 20, color: color),
-                        const SizedBox(height: 4),
-                        Text(
-                          item.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: color,
-                            fontWeight: isActive
-                                ? FontWeight.w700
-                                : FontWeight.w500,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: (onTap == null || !isReachable) ? null : () => onTap!(index),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 8,
+                        horizontal: 4,
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(item.icon, size: 20, color: color),
+                          const SizedBox(height: 4),
+                          Text(
+                            item.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: color,
+                              fontWeight: isActive
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
